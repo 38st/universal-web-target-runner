@@ -13,6 +13,10 @@
 
 [Swiftproxy](https://www.swiftproxy.net/?ref=awsbuilderid) — 8000万+高质量住宅 IP 覆盖 190+ 国家，连接稳定高匿名，支持自动化、数据采集与云业务场景，动态流量不过期，支持免费测试。九折优惠码：`PROXY90`
 
+<a href="https://www.thordata.com/?ls=add&lk=add"><img src="assets/thordata-proxy.png" alt="Thordata Proxy - 全球代理服务" width="630"></a>
+
+[Thordata Proxy](https://www.thordata.com/?ls=add&lk=add) — 提供 190+ 地区一亿+真实 IP，注册即可领取 500MB 试用，支持动态与粘性会话、无限并发，包含动态住宅、静态 ISP、移动代理和无限量住宅代理，$0.65/GB 起，适合广告投放、数据采集、跨境电商、社媒矩阵等全球自动化业务。
+
 ## 什么是 AWS Builder ID
 
 AWS Builder ID 是亚马逊提供的免费开发者账号，可用于访问 Amazon Q、CodeWhisperer、Kiro 等 AI 编程工具，无需绑定信用卡。
