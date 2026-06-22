@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generic target runner.
+Universal Web Target Runner entry point.
 
-The original AWS Builder ID flow now lives in targets.aws_builder. This module
-keeps the old run() entry point while adding --target dispatch for future flows.
+Site-specific behavior lives in target adapters. `aws_builder` is the default
+built-in target for backward compatibility.
 """
 
 import argparse
@@ -30,7 +30,7 @@ def run(target_name: str | dict[str, Any] | None = None, fixed_account: dict[str
     Run a target adapter.
 
     Backward compatibility:
-    - run() still runs the AWS Builder flow.
+    - run() still runs the default target.
     - run(fixed_account=account) still works for Outlook-based runs.
     - run(account_dict) is treated as the old positional fixed_account style.
     """

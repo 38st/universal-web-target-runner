@@ -1,1 +1,1 @@
-# AWS Builder ID 自动注册工具
+# Universal Web Target Runner package

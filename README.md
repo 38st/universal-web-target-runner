@@ -1,11 +1,11 @@
-# AWS Builder ID 自动注册工具
+# Universal Web Target Runner（通用目标自动化运行器）
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Selenium](https://img.shields.io/badge/Selenium-4.0+-orange.svg)](https://www.selenium.dev/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
 
-自动化注册 AWS Builder ID 账号的工具，支持多地区环境模拟、浏览器指纹随机化和代理集成。
+面向授权 Web 流程的目标化自动化运行器。项目通过 target adapter 扩展不同站点或表单流程，内置 `aws_builder` 示例目标，并提供多地区环境模拟、浏览器指纹配置、邮箱验证码和代理集成。
 
 ## 赞助商
 
@@ -17,14 +17,20 @@
 
 [Thordata Proxy](https://www.thordata.com/?ls=add&lk=add) — 提供 190+ 地区一亿+真实 IP，注册即可领取 500MB 试用，支持动态与粘性会话、无限并发，包含动态住宅、静态 ISP、移动代理和无限量住宅代理，$0.65/GB 起，适合广告投放、数据采集、跨境电商、社媒矩阵等全球自动化业务。
 
-## 什么是 AWS Builder ID
+## 支持的目标
 
-AWS Builder ID 是亚马逊提供的免费开发者账号，可用于访问 Amazon Q、CodeWhisperer、Kiro 等 AI 编程工具，无需绑定信用卡。
+| Target | 说明 |
+|--------|------|
+| `aws_builder` | AWS Builder ID 注册流程，作为默认内置目标保留 |
+| `generic_signup` | 通过 YAML 配置步骤的通用表单/注册流程，要求配置 `authorized: true` |
+
+本项目的核心目标不是绑定某一个服务，而是把浏览器、邮箱、代理、地区配置和结果保存抽象成可复用运行器。请只用于你拥有、测试或明确获得授权的 Web 流程。
 
 ## 功能特性
 
 | 功能 | 说明 |
 |-----|------|
+| Target 架构 | 使用 `--target` 选择目标适配器，AWS 只是一个内置目标 |
 | 多地区支持 | 美国、德国、日本三个地区的语言和时区环境 |
 | 设备模拟 | 桌面浏览器和移动设备 User-Agent 切换 |
 | 指纹随机化 | CPU 核心数、内存、WebGL 等硬件指纹伪装 |
@@ -34,11 +40,12 @@ AWS Builder ID 是亚马逊提供的免费开发者账号，可用于访问 Amaz
 
 ## 工作原理
 
-1. 创建临时邮箱地址
-2. 启动反检测浏览器，模拟目标地区环境
-3. 自动填写注册表单
-4. 从临时邮箱获取验证码并完成验证
-5. 保存账号信息到本地文件
+1. 选择目标适配器和目标配置
+2. 创建或复用邮箱地址
+3. 启动浏览器，模拟目标地区环境
+4. 执行目标流程中的页面操作
+5. 从邮箱获取验证码并完成验证
+6. 保存结果到本地 JSONL 文件
 
 ## 前置要求
 
@@ -52,8 +59,8 @@ AWS Builder ID 是亚马逊提供的免费开发者账号，可用于访问 Amaz
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/7836246/aws-builder-id.git
-cd aws-builder-id
+git clone https://github.com/7836246/aws-builder-id.git universal-web-target-runner
+cd universal-web-target-runner
 ```
 
 ### 2. 安装依赖
@@ -64,7 +71,7 @@ pip install -r requirements.txt
 
 ### 3. 部署临时邮箱服务
 
-本项目依赖临时邮箱接收 AWS 发送的验证码。推荐使用 [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email)：
+目标流程可使用临时邮箱接收验证码。推荐使用 [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email)：
 
 **部署步骤：**
 
@@ -102,13 +109,22 @@ region:
 # Windows 用户
 run.bat
 
-# 或直接运行
+# 查看可用目标
+python src/runners/main.py --list-targets
+
+# 默认运行 aws_builder
 python src/runners/main.py
+
+# 明确指定目标
+python src/runners/main.py --target aws_builder
+
+# 运行通用配置目标
+python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
 ```
 
 ### 6. 查看结果
 
-注册成功的账号保存在 `accounts.jsonl` 文件中：
+目标运行结果默认保存在对应目标配置指定的 JSONL 文件中。`aws_builder` 默认写入 `accounts.jsonl`：
 
 ```json
 {
@@ -134,6 +150,8 @@ python src/runners/main.py
     │   ├── batch_run.py   # 批量运行
     │   └── smart_run.py   # 智能运行（自动检测地区）
     ├── services/          # 邮箱服务
+    ├── targets/           # 目标适配器
+    ├── core/              # 通用运行器能力
     ├── managers/          # 代理管理
     └── helpers/           # 工具函数
 ```
@@ -187,7 +205,7 @@ python scripts/check_fingerprint.py
 
 ## 免责声明
 
-本项目仅供学习和研究自动化技术使用。使用者需自行承担使用风险，请遵守 AWS 服务条款和相关法律法规。作者不对任何滥用行为负责。
+本项目仅供学习、测试和授权自动化研究使用。使用者需自行承担使用风险，请遵守目标站点服务条款和相关法律法规。作者不对任何滥用行为负责。
 
 ## 许可证
 

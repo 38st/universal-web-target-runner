@@ -1,6 +1,6 @@
-# 使用说明
+# Universal Web Target Runner 使用说明
 
-本文档详细介绍如何配置和使用 AWS Builder ID 自动注册工具。
+本文档介绍如何配置和使用通用目标自动化运行器。项目通过 `--target` 选择具体流程，`aws_builder` 是默认内置目标，`generic_signup` 可通过 YAML 配置授权表单流程。
 
 ## 前置要求
 
@@ -14,8 +14,8 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/aws-builder-id-register.git
-cd aws-builder-id-register
+git clone https://github.com/your-username/aws-builder-id.git universal-web-target-runner
+cd universal-web-target-runner
 ```
 
 ### 2. 安装依赖
@@ -33,7 +33,27 @@ pip install -r requirements.txt
 
 ## 配置说明
 
-所有配置位于 `config/config.yaml`。
+共享配置位于 `config/config.yaml`，目标专属配置位于 `config/targets/`。
+
+### 目标配置
+
+```bash
+# 查看可用目标
+python src/runners/main.py --list-targets
+
+# 默认目标
+python src/runners/main.py --target aws_builder
+
+# 通用 YAML 配置目标
+python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
+```
+
+内置目标：
+
+| Target | 说明 |
+|--------|------|
+| `aws_builder` | AWS Builder ID 注册流程 |
+| `generic_signup` | YAML 配置驱动的授权表单流程 |
 
 ### 邮箱服务配置
 
@@ -134,8 +154,11 @@ run.bat
 # 单次运行
 python src/runners/main.py
 
+# 指定目标
+python src/runners/main.py --target aws_builder
+
 # 批量运行
-python src/runners/batch_run.py
+python src/runners/batch_run.py --target aws_builder
 
 # 智能运行（自动检测地区）
 python src/runners/smart_run.py
@@ -155,7 +178,7 @@ python src/runners/smart_run.py
 
 ## 输出
 
-注册成功的账号保存在 `accounts.jsonl`，每行一个 JSON：
+目标结果默认保存在目标配置指定的 JSONL 文件中。`aws_builder` 默认写入 `accounts.jsonl`，每行一个 JSON：
 
 ```json
 {
@@ -197,6 +220,6 @@ python src/runners/smart_run.py
 ## 注意事项
 
 - 本工具仅供学习研究使用
-- 请遵守 AWS 服务条款
+- 请遵守目标站点服务条款
 - 不要滥用，合理使用
 - 建议配合代理使用以提高成功率

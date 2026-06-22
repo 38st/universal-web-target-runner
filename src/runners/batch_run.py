@@ -26,7 +26,7 @@ def batch_run(count: int = 5,
               proxy_ok: bool = False,
               proxy_url: str | None = None):
     """
-    Run N signup flows sequentially.
+    Run N target flows sequentially.
 
     Args:
         count:       Number of target run attempts.
