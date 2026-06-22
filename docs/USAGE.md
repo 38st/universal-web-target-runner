@@ -1,109 +1,107 @@
-# Universal Web Target Runner 使用说明
+# Universal Web Target Runner Usage
 
-本文档介绍如何配置和使用通用目标自动化运行器。项目通过 `--target` 选择具体流程，`web_signup` 是默认内置目标，`generic_signup` 可通过 YAML 配置授权表单流程。
+This guide explains how to configure and run the project.
 
-## 前置要求
+## Requirements
 
 - Python 3.10+
-- Chrome 浏览器
-- 临时邮箱服务 (推荐使用 [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email))
-- (可选) 代理服务
+- Chrome browser
+- Temporary email service, such as `cloudflare_temp_email`
+- Optional proxy service
 
-## 安装步骤
-
-### 1. 克隆项目
+## Install
 
 ```bash
 git clone https://github.com/38st/universal-web-target-runner.git
 cd universal-web-target-runner
-```
-
-### 2. 安装依赖
-
-```bash
 pip install -r requirements.txt
 ```
 
-依赖包括：
-- `undetected-chromedriver` - 反检测浏览器驱动
-- `selenium` - 浏览器自动化
-- `faker` - 随机数据生成
-- `requests` - HTTP 请求
-- `pyyaml` - 配置文件解析
+## Configure
 
-## 配置说明
+Shared config lives in `config/config.yaml`.
 
-共享配置位于 `config/config.yaml`，目标专属配置位于 `config/targets/`。
+Target configs live in `config/targets/`.
 
-### 目标配置
-
-```bash
-# 查看可用目标
-python src/runners/main.py --list-targets
-
-# 默认目标
-python src/runners/main.py --target web_signup
-
-# 使用 AWS Builder ID 示例配置
-python src/runners/main.py --target web_signup --target-config config/targets/aws_builder_id.yaml
-
-# 通用 YAML 配置目标
-python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
-```
-
-内置目标：
-
-| Target | 说明 |
-|--------|------|
-| `web_signup` | 可配置的浏览器注册流程，默认使用 AWS Builder ID 示例配置 |
-| `generic_signup` | YAML 配置驱动的授权表单流程 |
-
-旧的 `aws_builder` target 名称仍可作为兼容别名使用，但新配置和文档默认使用 `web_signup`。
-
-### 邮箱服务配置
-
-本项目使用 [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email) 作为临时邮箱服务。
-
-#### 部署临时邮箱服务
-
-1. Fork 并部署 [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email) 到 Cloudflare Workers
-2. 配置 Cloudflare Email Routing 将域名邮件转发到 Worker
-3. 获取 Worker URL 和域名
-
-#### 配置邮箱参数
+Important shared settings:
 
 ```yaml
 email:
-  # Worker 服务地址
   worker_url: "https://your-worker.workers.dev"
-  
-  # 收信域名
   domain: "your-domain.com"
-  
-  # 随机邮箱前缀长度
-  prefix_length: 10
-  
-  # 等待验证邮件超时时间（秒）
   wait_timeout: 120
-  
-  # 轮询间隔（秒）
+
+region:
+  current: "usa"
+  device_type: "desktop"
+  use_proxy: false
+```
+
+## Targets
+
+```bash
+python src/runners/main.py --list-targets
+```
+
+Built-in targets:
+
+| Target | Description |
+|--------|-------------|
+| `web_signup` | Configurable browser signup workflow. |
+| `generic_signup` | YAML step runner for authorized form workflows. |
+
+The legacy target name `aws_builder` is still accepted as an alias for `web_signup`.
+
+## Run
+
+Run the default target:
+
+```bash
+python src/runners/main.py
+```
+
+Run `web_signup` explicitly:
+
+```bash
+python src/runners/main.py --target web_signup
+```
+
+Run the AWS Builder ID example config:
+
+```bash
+python src/runners/main.py --target web_signup --target-config config/targets/aws_builder_id.yaml
+```
+
+Run the generic YAML target:
+
+```bash
+python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
+```
+
+Run several attempts:
+
+```bash
+python src/runners/batch_run.py --target web_signup --count 5
+```
+
+## Email Service
+
+The temporary mailbox integration expects a deployed email worker. Configure:
+
+```yaml
+email:
+  worker_url: "https://your-worker.workers.dev"
+  domain: "your-domain.com"
+  prefix_length: 10
+  wait_timeout: 120
   poll_interval: 3
 ```
 
-### 地区配置
+Outlook IMAP verification can be used by configuring accounts in `src/services/outlook_accounts.py`.
 
-支持三个地区：美国 (usa)、德国 (germany)、日本 (japan)
+## Region And Device
 
-```yaml
-region:
-  # 当前地区
-  current: "usa"
-  
-  # 设备类型: desktop 或 mobile
-  device_type: "desktop"
-```
-
-切换地区：
+Switch region:
 
 ```bash
 python scripts/switch_region.py germany
@@ -111,18 +109,25 @@ python scripts/switch_region.py japan
 python scripts/switch_region.py usa
 ```
 
-### 代理配置
+Switch device profile:
 
-#### 静态代理
+```bash
+python scripts/switch_device.py mobile
+python scripts/switch_device.py desktop
+```
+
+## Proxy
+
+Static proxy:
 
 ```yaml
 region:
   use_proxy: true
   proxy_mode: "static"
-  proxy_url: "http://your-proxy:port"
+  proxy_url: "http://proxy-host:port"
 ```
 
-#### 动态代理 API
+Dynamic proxy API:
 
 ```yaml
 region:
@@ -131,100 +136,33 @@ region:
   proxy_api:
     url: "http://your-proxy-api.com/get?key=YOUR_KEY"
     timeout: 10
-    protocol: "http"  # http 或 socks5
+    protocol: "http"
     auth_required: false
-    username: ""
-    password: ""
 ```
 
-### 浏览器配置
-
-```yaml
-browser:
-  headless: false  # 是否无头模式
-  slow_mo: 100     # 操作延迟（毫秒）
-```
-
-## 运行
-
-### Windows
+Test proxy:
 
 ```bash
-run.bat
+python scripts/check_proxy.py
 ```
 
-### 命令行
+## Output
 
-```bash
-# 单次运行
-python src/runners/main.py
-
-# 指定目标
-python src/runners/main.py --target web_signup
-
-# 批量运行
-python src/runners/batch_run.py --target web_signup
-
-# 智能运行（自动检测地区）
-python src/runners/smart_run.py
-```
-
-## 辅助脚本
-
-位于 `scripts/` 目录：
-
-| 脚本 | 功能 |
-|-----|------|
-| `switch_region.py` | 切换地区配置 |
-| `switch_device.py` | 切换设备类型 |
-| `check_proxy.py` | 测试代理连接 |
-| `check_fingerprint.py` | 检查浏览器指纹 |
-| `disable_proxy.py` | 禁用代理 |
-
-## 输出
-
-目标结果默认保存在目标配置指定的 JSONL 文件中。`web_signup` 示例配置默认写入 `accounts.jsonl`，每行一个 JSON：
+Target results are written to the file specified by the target config. The example config writes to `accounts.jsonl`.
 
 ```json
 {
-  "email": "xxx@your-domain.com",
-  "password": "生成的密码",
-  "name": "随机姓名",
+  "email": "user@example.test",
+  "password": "generated-password",
+  "name": "Generated Name",
   "jwt_token": "...",
-  "created_at": "2025-01-13 10:00:00",
+  "created_at": "2026-06-22 10:00:00",
   "status": "registered"
 }
 ```
 
-## 常见问题
+## Notes
 
-### Q: 验证码收不到？
-
-1. 检查临时邮箱服务是否正常运行
-2. 确认 Cloudflare Email Routing 配置正确
-3. 增加 `wait_timeout` 时间
-
-### Q: 被检测为机器人？
-
-1. 启用代理，使用目标地区 IP
-2. 切换到移动设备模式
-3. 尝试不同地区配置
-
-### Q: 代理连接失败？
-
-1. 运行 `python scripts/check_proxy.py` 测试
-2. 检查代理格式是否正确
-3. 确认代理服务可用
-
-### Q: Chrome 启动失败？
-
-1. 确保已安装 Chrome 浏览器
-2. 更新 `undetected-chromedriver`: `pip install -U undetected-chromedriver`
-3. 检查 Chrome 版本兼容性
-
-## 注意事项
-
-- 本工具仅供学习研究使用
-- 请遵守目标站点服务条款
-- 不要滥用，合理使用
-- 建议配合代理使用以提高成功率
+- Use this only for owned, test, or explicitly authorized workflows.
+- Keep target-specific selectors in target config files.
+- Keep shared browser, proxy, region, and email behavior in core services.

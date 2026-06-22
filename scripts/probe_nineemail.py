@@ -3,20 +3,20 @@ import time
 
 def probe():
     with sync_playwright() as p:
-        # 使用非无头模式（如果支持）或者是无头
+        # Use headless mode for probing.
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         
         url = "https://api.nineemail.com"
-        print(f"正在打开: {url}")
+        print(f"Opening: {url}")
         
         try:
             page.goto(url, timeout=30000)
             page.wait_for_load_state("networkidle")
-            print(f"页面标题: {page.title()}")
+            print(f"Page title: {page.title()}")
             
-            # 打印页面上的输入框和按钮
-            print("--- 页面元素分析 ---")
+            # Print inputs and buttons on the page.
+            print("--- Page element analysis ---")
             inputs = page.locator("input").all()
             for i, inp in enumerate(inputs):
                 print(f"Input {i}: name='{inp.get_attribute('name')}', placeholder='{inp.get_attribute('placeholder')}', id='{inp.get_attribute('id')}'")
@@ -25,15 +25,15 @@ def probe():
             for i, btn in enumerate(buttons):
                 print(f"Button {i}: text='{str(btn.text_content()).strip()}', type='{btn.get_attribute('type')}'")
                 
-            # 同时也找找 links，有时候按钮是 a 标签
+            # Also inspect links because actions are sometimes anchors.
             links = page.locator("a").all()
             for i, link in enumerate(links):
                 text = str(link.text_content()).strip()
-                if "反查" in text or "查询" in text:
+                if "lookup" in text.lower() or "query" in text.lower():
                     print(f"Link {i}: text='{text}', href='{link.get_attribute('href')}'")
             
         except Exception as e:
-            print(f"出错: {e}")
+            print(f"Error: {e}")
         
         browser.close()
         

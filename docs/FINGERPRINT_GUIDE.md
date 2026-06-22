@@ -1,271 +1,35 @@
-# 🎭 浏览器指纹随机化完全指南
+# Fingerprint Guide
 
-## ✅ 已实现的指纹保护
+The project includes basic browser-signal controls for authorized testing workflows.
 
-本项目实现了业界领先的**多维度指纹随机化**，确保每次运行都生成唯一且真实的浏览器指纹。
+## Implemented Controls
 
-### 1. 📸 Canvas 指纹随机化
-**作用**: Canvas是最常用的指纹识别技术之一
+- Temporary Chrome user data directory per run
+- Region-based User-Agent selection
+- Locale and Accept-Language settings
+- Timezone override through Chrome DevTools Protocol
+- Approximate geolocation override
+- Hardware signal variation for CPU core count and memory
+- WebGL renderer override
+- WebRTC IP handling flags
 
-**实现方式**:
-- 在Canvas渲染时添加微小的RGB噪点
-- 每次运行噪点值随机（1-10）
-- 视觉上完全不可见，但指纹完全不同
-
-**检测方法**:
-```javascript
-// 网站检测Canvas指纹的方式
-canvas.toDataURL()  // 我们会在这里添加噪点
-```
-
-### 2. 🎮 WebGL 指纹随机化
-**作用**: WebGL渲染器信息泄露GPU型号
-
-**实现方式**:
-- 随机选择GPU厂商（Intel, NVIDIA, AMD, Apple）
-- 随机选择GPU型号
-- 覆盖 `UNMASKED_VENDOR_WEBGL` 和 `UNMASKED_RENDERER_WEBGL`
-
-**示例值**:
-- Intel(R) UHD Graphics 620
-- NVIDIA GeForce GTX 1660
-- AMD Radeon RX 580
-- Apple M1
-
-### 3. 🔊 Audio 指纹随机化
-**作用**: AudioContext可以通过音频处理识别设备
-
-**实现方式**:
-- 在音频振荡器频率中添加微小偏移
-- 偏移量: 0.00001-0.0001 Hz
-- 不影响音频质量，但改变指纹
-
-### 4. 🖥️ Navigator 对象随机化
-**作用**: Navigator包含大量设备信息
-
-**随机化项目**:
-- `hardwareConcurrency`: CPU核心数 (2, 4, 6, 8, 12, 16)
-- `deviceMemory`: RAM大小 (4, 8, 16, 32 GB)
-- `maxTouchPoints`: 触摸点数 (0, 1, 5, 10)
-- `webdriver`: 强制设为 undefined（隐藏自动化标记）
-- `plugins`: 插件列表随机化
-
-### 5. 📺 Screen 信息随机化
-**作用**: 屏幕分辨率是常见的指纹维度
-
-**随机化参数**:
-- 分辨率: 1920x1080, 1366x768, 1440x900, 1536x864, 2560x1440
-- 颜色深度: 24位 或 32位
-- 像素深度: 24位 或 32位
-
-### 6. 🌐 WebRTC IP 泄露防护
-**作用**: 防止WebRTC绕过代理泄露真实IP
-
-**实现方式**:
-- 覆盖 `RTCPeerConnection` 构造函数
-- 禁用mDNS候选
-- 强制使用代理连接
-
-## 🎯 指纹随机化效果
-
-### 运行前后对比
-
-**第一次运行**:
-```
-Canvas Hash: a7f3c9d2e8b4...
-WebGL Vendor: NVIDIA Corporation
-WebGL Renderer: GeForce GTX 1660
-Hardware Concurrency: 8
-Device Memory: 16
-Screen: 1920x1080
-```
-
-**第二次运行**:
-```
-Canvas Hash: 9e2d4f1a5c7b...  ← 完全不同！
-WebGL Vendor: Intel Inc.
-WebGL Renderer: UHD Graphics 620
-Hardware Concurrency: 4
-Device Memory: 8
-Screen: 1366x768
-```
-
-## 🧪 测试指纹随机化
-
-### 方法1: 使用内置测试工具
+## Test Fingerprint Behavior
 
 ```bash
-python check_fingerprint.py
+python scripts/check_fingerprint.py
 ```
 
-选择访问以下专业指纹检测网站：
-1. **BrowserLeaks Canvas** - 检测Canvas指纹
-2. **BrowserLeaks WebGL** - 检测WebGL指纹  
-3. **CreepJS** - 综合指纹检测
+The script opens public fingerprint test pages so you can inspect the browser signals manually.
 
-### 方法2: 在线指纹检测网站
+## Operational Notes
 
-访问这些网站测试：
-- https://browserleaks.com/canvas
-- https://browserleaks.com/webgl
-- https://abrahamjuliot.github.io/creepjs/
-- https://amiunique.org/
-- https://coveryourtracks.eff.org/
+- Avoid unrealistic combinations, such as a mobile profile with impossible desktop hardware signals.
+- Keep User-Agent, locale, timezone, geolocation, and proxy region aligned.
+- Update User-Agent examples as Chrome versions change.
+- Treat this as a testing aid, not a guarantee of undetectability.
 
-**建议**: 运行项目2-3次，每次在上述网站检查，应该看到完全不同的指纹！
+## Relevant Files
 
-## 📊 指纹唯一性保证
-
-### 随机维度统计
-
-假设我们的配置：
-- Canvas噪点组合: 10 × 10 × 10 = **1,000** 种
-- WebGL厂商/渲染器: 4 × 5 = **20** 种
-- CPU核心数: **6** 种选择
-- 内存大小: **4** 种选择
-- 屏幕分辨率: **5** 种选择
-- Audio偏移: 连续值，理论上**无限**种
-
-**总组合数** = 1000 × 20 × 6 × 4 × 5 = **2,400,000** 种
-
-即使每天运行1000次，也需要6.5年才可能重复！
-
-## ⚙️ 高级配置
-
-### 自定义噪点强度
-
-编辑 `fingerprint.py`:
-
-```python
-# 增加Canvas噪点强度（更强的随机化）
-noise_r = random.randint(1, 20)  # 从10改为20
-noise_g = random.randint(1, 20)
-noise_b = random.randint(1, 20)
-```
-
-### 添加自定义GPU型号
-
-```python
-renderers = [
-    'Intel(R) UHD Graphics 620',
-    'NVIDIA GeForce RTX 3080',  # 添加新型号
-    '你的自定义GPU型号',
-]
-```
-
-## 🛡️ 防检测策略
-
-### Layer 1: 基础隐藏
-- ✅ `undetected-chromedriver` - 隐藏webdriver属性
-- ✅ 禁用自动化特征标记
-
-### Layer 2: 环境伪装
-- ✅ 真实User-Agent
-- ✅ 匹配的语言/时区
-- ✅ 地理位置伪装
-- ✅ 代理IP
-
-### Layer 3: 指纹随机化 ⭐
-- ✅ Canvas指纹
-- ✅ WebGL指纹
-- ✅ Audio指纹
-- ✅ Navigator信息
-- ✅ Screen信息
-- ✅ WebRTC防护
-
-### Layer 4: 行为模拟
-- ✅ 人类延迟
-- ✅ 随机停顿
-- ✅ 模拟打字速度
-
-## 📈 成功率提升
-
-根据实际测试，指纹随机化可以：
-
-- 📊 **降低50-70%的检测率**
-- 🔄 **允许同一设备多次注册**
-- 🎯 **绕过基于指纹的반检测**
-- 🌍 **配合代理实现完美隔离**
-
-## ⚠️ 注意事项
-
-### 1. 不要过度随机化
-- 某些组合可能不真实（如移动设备有16核CPU）
-- 建议使用默认配置，已经过优化
-
-### 2. 与其他配置配合
-- 指纹随机化 + 代理IP = 最佳效果
-- 确保User-Agent与OS匹配
-
-### 3. 定期更新
-- 浏览器版本更新时，记得更新User-Agent
-- GPU型号库建议每季度更新
-
-## 🚀 快速开始
-
-### 正常运行（已自动启用）
-
-```bash
-# 智能模式（自动配置+指纹随机化）
-python smart_run.py
-
-# 或传统模式
-python main.py
-```
-
-**指纹随机化已默认启用！** 每次运行都会自动注入。
-
-### 验证效果
-
-```bash
-# 运行指纹检测
-python check_fingerprint.py
-
-# 选择1，访问Canvas检测网站
-# 多次运行，观察指纹变化
-```
-
-## 🎓 技术原理
-
-### JavaScript注入时机
-
-我们使用 Chrome DevTools Protocol (CDP) 的 `Page.addScriptToEvaluateOnNewDocument` API：
-
-```python
-driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-    'source': combined_script
-})
-```
-
-**优势**:
-- 在任何页面脚本执行**之前**注入
-- 对页面完全透明
-- 无法被检测
-
-### 覆盖vs修改
-
-我们使用 `Object.defineProperty` 而不是直接赋值：
-
-```javascript
-Object.defineProperty(navigator, 'hardwareConcurrency', {
-    get: () => 8  // 每次访问都返回这个值
-});
-```
-
-**原因**:
-- 直接赋值可被检测
-- defineProperty 更难被发现
-- 可以控制 writable/configurable属性
-
-## 📚 参考资料
-
-- [Canvas Fingerprinting](https://browserleaks.com/canvas)
-- [WebGL Fingerprinting](https://browserleaks.com/webgl)
-- [CreepJS - 开源指纹库](https://github.com/abrahamjuliot/creepjs)
-- [FingerprintJS](https://github.com/fingerprintjs/fingerprintjs)
-
----
-
-**当前状态**: ✅ 全面指纹随机化已启用
-**防护等级**: 🛡️🛡️🛡️🛡️🛡️ (5/5)
-**建议**: 配合动态代理使用，达到最佳防检测效果
+- `src/core/browser.py`
+- `src/helpers/fingerprint.py`
+- `config/config.yaml`

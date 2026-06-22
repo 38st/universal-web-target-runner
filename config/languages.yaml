@@ -1,8 +1,8 @@
-# 多语言界面文本配置
-# 用于支持不同地区的本地化界面
+# Multilingual UI text config.
+# Used to support localized UI element lookup.
 
 languages:
-  # 德语 (Germany)
+  # German (Germany)
   de:
     continue: "Weiter"
     sign_up: "Anmelden"
@@ -13,18 +13,18 @@ languages:
     re_enter_password: "Passwort erneut eingeben"
     verification_code: "Bestätigungscode"
     
-  # 日语 (Japan)
+  # Japanese region fallback.
   ja:
-    continue: "続行"
-    sign_up: "サインアップ"
-    sign_up_with_builder_id: "Builder IDでサインアップ"
-    enter_email: "メールアドレスを入力"
-    enter_name: "名前を入力"
-    enter_password: "パスワードを入力"
-    re_enter_password: "パスワードを再入力"
-    verification_code: "確認コード"
+    continue: "Continue"
+    sign_up: "Sign up"
+    sign_up_with_builder_id: "Sign up with Builder ID"
+    enter_email: "Enter email"
+    enter_name: "Enter name"
+    enter_password: "Enter password"
+    re_enter_password: "Re-enter password"
+    verification_code: "Verification code"
     
-  # 英语 (USA and fallback)
+  # English (USA and fallback)
   en:
     continue: "Continue"
     sign_up: "Sign up"
@@ -35,7 +35,7 @@ languages:
     re_enter_password: "Re-enter password"
     verification_code: "Verification code"
 
-# 地区到语言的映射
+# Region to language mapping.
 region_language_map:
   germany: "de"
   japan: "ja"

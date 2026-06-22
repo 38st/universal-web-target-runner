@@ -42,7 +42,6 @@ selectors:
 
   continue_xpaths:
     - "//button[contains(., 'Continue')]"
-    - "//button[contains(., '继续')]"
     - "//button[@type='submit']"
 
   page_error_xpaths:
@@ -59,13 +58,11 @@ selectors:
     - "//button[contains(@class, 'close')]"
     - "//button[text()='×']"
     - "//button[text()='OK']"
-    - "//button[text()='确定']"
 
   otp_input_css: 'input[placeholder*="digit"], input[type="text"]'
   verify_xpaths:
     - "//button[contains(., 'Verify')]"
     - "//button[contains(., 'Continue')]"
-    - "//button[contains(., '继续')]"
     - "//button[@type='submit']"
 
   password_input_css: 'input[type="password"]'

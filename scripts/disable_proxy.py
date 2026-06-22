@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-临时配置切换工具 - 禁用代理
+Temporary config switch tool: disable proxy.
 """
 
 import yaml
@@ -8,16 +8,16 @@ from pathlib import Path
 
 config_path = Path(__file__).parent / "config.yaml"
 
-# 读取配置
+# Read config.
 with open(config_path, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
-# 禁用代理
+# Disable proxy.
 config['region']['use_proxy'] = False
 
-# 保存配置
+# Save config.
 with open(config_path, 'w', encoding='utf-8') as f:
     yaml.dump(config, f, allow_unicode=True, sort_keys=False)
 
-print("✅ 代理已临时禁用")
-print("   如需重新启用，手动修改 config.yaml 中的 use_proxy: true")
+print("✅ Proxy temporarily disabled")
+print("   To re-enable it, set use_proxy: true in config.yaml")

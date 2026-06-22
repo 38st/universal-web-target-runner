@@ -3,16 +3,16 @@ from outlook_accounts import OUTLOOK_ACCOUNTS
 import time
 
 def debug_one():
-    # 取第一个账号
+    # Use the first account.
     account = OUTLOOK_ACCOUNTS[0]
-    print(f"🐞 开始单线程 Debug 运行: {account['email']}")
-    print("👀 请观察浏览器行为...")
+    print(f"🐞 Starting single-thread debug run: {account['email']}")
+    print("👀 Watch the browser behavior...")
     
-    # 运行
+    # Run.
     try:
         run(fixed_account=account)
     except Exception as e:
-        print(f"❌ 运行出错: {e}")
+        print(f"❌ Run error: {e}")
 
 if __name__ == "__main__":
     debug_one()

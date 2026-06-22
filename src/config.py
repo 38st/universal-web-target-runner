@@ -1,12 +1,12 @@
 import yaml
 from pathlib import Path
 
-# 读取配置文件
+# Read config file.
 config_path = Path(__file__).parent.parent / "config" / "config.yaml"
 with open(config_path, "r", encoding="utf-8") as f:
     _config = yaml.safe_load(f)
 
-# 邮箱配置
+# Email config.
 EMAIL_WORKER_URL = _config["email"]["worker_url"]
 EMAIL_DOMAIN = _config["email"]["domain"]
 EMAIL_PREFIX_LENGTH = _config["email"]["prefix_length"]
@@ -14,11 +14,11 @@ EMAIL_WAIT_TIMEOUT = _config["email"]["wait_timeout"]
 EMAIL_POLL_INTERVAL = _config["email"]["poll_interval"]
 EMAIL_ADMIN_PASSWORD = _config["email"].get("admin_password", "")
 
-# 浏览器配置
+# Browser config.
 HEADLESS = _config["browser"]["headless"]
 SLOW_MO = _config["browser"]["slow_mo"]
 
-# 地区配置
+# Region config.
 REGION_CURRENT = _config["region"]["current"]
 DEVICE_TYPE = _config["region"].get("device_type", "desktop")
 REGION_USE_PROXY = _config["region"].get("use_proxy", False)
@@ -29,5 +29,5 @@ REGION_PROFILES = _config["region"]["profiles"]
 
 
 
-# HTTP 配置
+# HTTP config.
 HTTP_TIMEOUT = _config["http"]["timeout"]

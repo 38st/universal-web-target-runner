@@ -1,6 +1,6 @@
 """
-浏览器指纹随机化模块
-实现Canvas、WebGL、Audio等多维度指纹随机化
+Browser fingerprint randomization module.
+Randomizes Canvas, WebGL, Audio, and other browser signals.
 """
 
 import random
@@ -9,17 +9,17 @@ import time
 
 
 class FingerprintRandomizer:
-    """指纹随机化器"""
+    """Fingerprint randomizer."""
     
     def __init__(self):
-        # 生成随机种子
+        # Generate a random seed.
         self.seed = int(time.time() * 1000) % 10000
         random.seed(self.seed)
     
     def get_canvas_noise_script(self):
         """
-        Canvas指纹随机化脚本
-        在Canvas渲染时添加微小的噪点，改变指纹但不影响视觉
+        Canvas fingerprint randomization script.
+        Adds small rendering noise to change the fingerprint without visible impact.
         """
         noise_r = random.randint(1, 10)
         noise_g = random.randint(1, 10)
@@ -31,7 +31,7 @@ class FingerprintRandomizer:
             const originalToBlob = HTMLCanvasElement.prototype.toBlob;
             const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
             
-            // 添加噪点到Canvas
+            // Add noise to Canvas.
             const addNoise = function(canvas) {{
                 const ctx = canvas.getContext('2d');
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -43,19 +43,19 @@ class FingerprintRandomizer:
                 ctx.putImageData(imageData, 0, 0);
             }};
             
-            // 覆盖toDataURL
+            // Override toDataURL.
             HTMLCanvasElement.prototype.toDataURL = function() {{
                 addNoise(this);
                 return originalToDataURL.apply(this, arguments);
             }};
             
-            // 覆盖toBlob
+            // Override toBlob.
             HTMLCanvasElement.prototype.toBlob = function() {{
                 addNoise(this);
                 return originalToBlob.apply(this, arguments);
             }};
             
-            // 覆盖getImageData
+            // Override getImageData.
             CanvasRenderingContext2D.prototype.getImageData = function() {{
                 const imageData = originalGetImageData.apply(this, arguments);
                 for (let i = 0; i < imageData.data.length; i += 4) {{
@@ -71,8 +71,8 @@ class FingerprintRandomizer:
     
     def get_webgl_noise_script(self):
         """
-        WebGL指纹随机化脚本
-        修改WebGL渲染器信息和参数
+        WebGL fingerprint randomization script.
+        Changes WebGL renderer info and parameters.
         """
         vendors = ['Intel Inc.', 'NVIDIA Corporation', 'AMD', 'Apple Inc.']
         renderers = [
@@ -115,8 +115,8 @@ class FingerprintRandomizer:
     
     def get_audio_noise_script(self):
         """
-        Audio指纹随机化脚本
-        在AudioContext中添加噪点
+        Audio fingerprint randomization script.
+        Adds small noise to AudioContext.
         """
         noise = random.uniform(0.00001, 0.0001)
         
@@ -129,7 +129,7 @@ class FingerprintRandomizer:
                     const oscillator = originalCreateOscillator.call(this);
                     const originalStart = oscillator.start;
                     oscillator.start = function() {{
-                        // 添加微小的频率偏移
+                        // Add a small frequency offset.
                         oscillator.frequency.value = oscillator.frequency.value + {noise};
                         return originalStart.apply(this, arguments);
                     }};
@@ -142,8 +142,8 @@ class FingerprintRandomizer:
     
     def get_navigator_override_script(self):
         """
-        Navigator对象覆盖脚本
-        随机化硬件并发、设备内存等信息
+        Navigator override script.
+        Randomizes hardware concurrency, device memory, and related values.
         """
         hardware_concurrency = random.choice([2, 4, 6, 8, 12, 16])
         device_memory = random.choice([4, 8, 16, 32])
@@ -151,27 +151,27 @@ class FingerprintRandomizer:
         
         script = f"""
         (function() {{
-            // 硬件并发数
+            // Hardware concurrency.
             Object.defineProperty(navigator, 'hardwareConcurrency', {{
                 get: () => {hardware_concurrency}
             }});
             
-            // 设备内存
+            // Device memory.
             Object.defineProperty(navigator, 'deviceMemory', {{
                 get: () => {device_memory}
             }});
             
-            // 触摸点数
+            // Touch point count.
             Object.defineProperty(navigator, 'maxTouchPoints', {{
                 get: () => {max_touch_points}
             }});
             
-            // 隐藏webdriver属性
+            // Hide webdriver property.
             Object.defineProperty(navigator, 'webdriver', {{
                 get: () => undefined
             }});
             
-            // 插件数组随机化
+            // Randomize plugin list.
             const plugins = ['Chrome PDF Plugin', 'Chrome PDF Viewer', 'Native Client'];
             Object.defineProperty(navigator, 'plugins', {{
                 get: () => plugins
@@ -182,7 +182,7 @@ class FingerprintRandomizer:
     
     def get_screen_randomize_script(self):
         """
-        屏幕信息随机化脚本
+        Screen info randomization script.
         """
         resolutions = [
             {'width': 1920, 'height': 1080},
@@ -227,18 +227,18 @@ class FingerprintRandomizer:
     
     def get_webrtc_protect_script(self):
         """
-        WebRTC IP泄露防护脚本
+        WebRTC IP leak protection script.
         """
         script = """
         (function() {
-            // 阻止WebRTC泄露真实IP
+            // Prevent WebRTC from leaking the real IP.
             const originalRTCPeerConnection = window.RTCPeerConnection;
             window.RTCPeerConnection = function(config = {}) {
-                // 强制使用代理，防止IP泄露
+                // Force proxy usage to prevent IP leaks.
                 if (!config.iceServers) {
                     config.iceServers = [];
                 }
-                // 禁用mDNS
+                // Disable mDNS.
                 config.iceCandidatePoolSize = 0;
                 return new originalRTCPeerConnection(config);
             };
@@ -248,7 +248,7 @@ class FingerprintRandomizer:
     
     def get_all_scripts(self):
         """
-        获取所有指纹随机化脚本
+        Get all fingerprint randomization scripts.
         """
         scripts = [
             self.get_canvas_noise_script(),
@@ -259,28 +259,28 @@ class FingerprintRandomizer:
             self.get_webrtc_protect_script()
         ]
         
-        # 合并所有脚本
+        # Combine all scripts.
         return '\n'.join(scripts)
     
     def inject_to_driver(self, driver):
         """
-        将所有指纹随机化脚本注入到浏览器
+        Inject all fingerprint randomization scripts into the browser.
         
         Args:
-            driver: Selenium WebDriver实例
+            driver: Selenium WebDriver instance.
         """
         try:
-            # 执行所有脚本
+            # Inject all scripts.
             combined_script = self.get_all_scripts()
             driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
                 'source': combined_script
             })
-            print("✅ 指纹随机化脚本已注入")
+            print("✅ Fingerprint randomization scripts injected")
             return True
         except Exception as e:
-            print(f"⚠️  指纹随机化注入失败: {e}")
+            print(f"⚠️  Fingerprint randomization injection failed: {e}")
             return False
 
 
-# 创建全局实例
+# Global instance.
 fingerprint_randomizer = FingerprintRandomizer()

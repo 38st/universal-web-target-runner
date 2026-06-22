@@ -1,6 +1,6 @@
 """
-邮箱服务模块
-基于 cloudflare_temp_email 项目实现临时邮箱功能
+Email service module.
+Implements temporary mailbox support using the cloudflare_temp_email project.
 """
 
 import sys
@@ -62,10 +62,10 @@ def message_matches_filters(
 
 def create_temp_email():
     """
-    创建临时邮箱
-    返回: (邮箱地址, JWT令牌)，失败返回 (None, None)
+    Create a temporary mailbox.
+    Returns: (email address, JWT token), or (None, None) on failure.
     """
-    print("正在创建临时邮箱...")
+    print("Creating temporary mailbox...")
 
     prefix = ''.join(random.choices(
         string.ascii_lowercase + string.digits,
@@ -91,23 +91,23 @@ def create_temp_email():
             actual_email = result.get('address')
 
             if jwt_token and actual_email:
-                print(f"邮箱创建成功: {actual_email}")
+                print(f"Mailbox created: {actual_email}")
                 return actual_email, jwt_token
             elif jwt_token:
                 fallback_email = f"tmp{prefix}@{EMAIL_DOMAIN}"
-                print(f"邮箱创建成功: {fallback_email}")
+                print(f"Mailbox created: {fallback_email}")
                 return fallback_email, jwt_token
         else:
-            print(f"API 错误: HTTP {response.status_code}")
+            print(f"API error: HTTP {response.status_code}")
 
     except Exception as e:
-        print(f"创建邮箱失败: {e}")
+        print(f"Mailbox creation failed: {e}")
 
     return None, None
 
 
 def fetch_emails(jwt_token: str):
-    """获取邮件列表"""
+    """Fetch mailbox messages."""
     headers = {
         "Authorization": f"Bearer {jwt_token}",
         "User-Agent": get_user_agent()
@@ -128,13 +128,13 @@ def fetch_emails(jwt_token: str):
                 return result.get('results', result.get('mails', []))
                 
     except Exception as e:
-        print(f"  获取邮件错误: {e}")
+        print(f"  Email fetch error: {e}")
     
     return None
 
 
 def get_email_detail(jwt_token: str, email_id: str):
-    """获取邮件详情"""
+    """Fetch email details."""
     headers = {
         "Authorization": f"Bearer {jwt_token}",
         "User-Agent": get_user_agent()
@@ -151,13 +151,13 @@ def get_email_detail(jwt_token: str, email_id: str):
             return response.json()
             
     except Exception as e:
-        print(f"  获取邮件详情错误: {e}")
+        print(f"  Email detail fetch error: {e}")
     
     return None
 
 
 def parse_raw_email(raw_content: str):
-    """解析原始邮件内容"""
+    """Parse raw email content."""
     result = {'subject': '', 'body': '', 'sender': ''}
     
     if not raw_content:
@@ -181,20 +181,20 @@ def parse_raw_email(raw_content: str):
             if payload:
                 result['body'] = payload.decode('utf-8', errors='ignore')
     except Exception as e:
-        print(f"  解析邮件错误: {e}")
+        print(f"  Email parse error: {e}")
     
     return result
 
 
 def wait_for_verification_email(jwt_token: str, timeout: int = None, filters: dict | None = None):
     """
-    等待并提取验证码
-    返回: 验证码字符串，未找到返回 None
+    Wait for and extract a verification code.
+    Returns the code string, or None when not found.
     """
     if timeout is None:
         timeout = EMAIL_WAIT_TIMEOUT
     
-    print(f"正在等待验证邮件（最长 {timeout} 秒）...")
+    print(f"Waiting for verification email (up to {timeout} seconds)...")
     start_time = time.time()
     
     while time.time() - start_time < timeout:
@@ -214,8 +214,8 @@ def wait_for_verification_email(jwt_token: str, timeout: int = None, filters: di
                     body = ''
                 
                 if message_matches_filters(sender=sender, subject=subject, body=body, filters=filters):
-                    print(f"\n收到验证邮件!")
-                    print(f"   主题: {subject}")
+                    print("\nVerification email received!")
+                    print(f"   Subject: {subject}")
                     
                     code = extract_verification_code(subject)
                     if code:
@@ -248,8 +248,8 @@ def wait_for_verification_email(jwt_token: str, timeout: int = None, filters: di
                                     return code
         
         elapsed = int(time.time() - start_time)
-        print(f"  等待中... ({elapsed}秒)", end='\r')
+        print(f"  Waiting... ({elapsed}s)", end='\r')
         time.sleep(EMAIL_POLL_INTERVAL)
     
-    print("\n等待验证邮件超时")
+    print("\nTimed out waiting for verification email")
     return None

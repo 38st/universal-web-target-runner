@@ -1,75 +1,75 @@
-# 邮箱服务配置
+# Email service config.
 email:
-  # 你部署的 cloudflare_temp_email Worker 服务地址
+  # Deployed cloudflare_temp_email Worker URL.
   worker_url: "https://your-worker.workers.dev"
 
-  # 邮箱域名（你在 Cloudflare Email Routing 中配置的收信域名）
+  # Mail domain configured in Cloudflare Email Routing.
   domain: "your-domain.com"
 
-  # 生成的随机邮箱前缀长度
+  # Random mailbox prefix length.
   prefix_length: 10
 
-  # 等待验证邮件的超时时间（秒）
+  # Verification email wait timeout in seconds.
   wait_timeout: 120
 
-  # 轮询邮件的间隔时间（秒）
+  # Mail polling interval in seconds.
   poll_interval: 3
 
-  # 管理员密码（用于管理员 API）
+  # Admin password for admin APIs.
   admin_password: "your-admin-password"
 
-# 浏览器配置
+# Browser config.
 browser:
-  headless: false      # 是否无头模式
-  slow_mo: 100         # 操作延迟（毫秒）
+  headless: false      # Run browser in headless mode.
+  slow_mo: 100         # Operation delay in milliseconds.
 
-# 地区环境配置
-# 支持的地区: germany (德国), japan (日本), usa (美国)
+# Region environment config.
+# Supported regions: germany, japan, usa.
 region:
-  # 当前使用的地区
-  current: "usa"    # 可选: germany, japan, usa
+  # Active region.
+  current: "usa"    # Options: germany, japan, usa
   
-  # 设备类型: desktop (桌面) 或 mobile (移动)
-  device_type: "desktop"  # 可选: desktop, mobile
+  # Device type.
+  device_type: "desktop"  # Options: desktop, mobile
   
-  # 代理配置
-  # 是否使用代理
+  # Proxy config.
+  # Whether to use a proxy.
   use_proxy: true
   
-  # 代理模式: static (静态代理) 或 dynamic (动态API)
-  proxy_mode: "dynamic"  # 可选: static, dynamic
+  # Proxy mode: static or dynamic API.
+  proxy_mode: "dynamic"  # Options: static, dynamic
   
-  # 静态代理配置 (格式: http://host:port 或 socks5://host:port)
+  # Static proxy URL, for example http://host:port or socks5://host:port.
   proxy_url: ""
   
-  # 动态代理API配置
+  # Dynamic proxy API config.
   proxy_api:
-    # API URL (返回格式: ip:port，每次请求返回新的代理)
+    # API URL. Expected response format: ip:port. Each request should return a fresh proxy.
     url: "http://your-proxy-api.com/get?key=YOUR_API_KEY"
     
-    # 请求超时时间（秒）
+    # Request timeout in seconds.
     timeout: 10
     
-    # 代理协议 (http 或 socks5)
-    protocol: "http"  # 可选: http, socks5
+    # Proxy protocol.
+    protocol: "http"  # Options: http, socks5
     
-    # 是否需要认证
+    # Whether proxy auth is required.
     auth_required: false
     username: ""
     password: ""
   
-  # 各地区详细配置
+  # Detailed per-region config.
   profiles:
     germany:
       locale: "de-DE"
       timezone: "Europe/Berlin"
       accept_language: "de-DE,de;q=0.9,en;q=0.8"
-      # 桌面 User-Agent
+      # Desktop User-Agents.
       desktop_user_agents:
         - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      # 移动 User-Agent
+      # Mobile User-Agents.
       mobile_user_agents:
         - "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
         - "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
@@ -80,11 +80,11 @@ region:
       locale: "ja-JP"
       timezone: "Asia/Tokyo"
       accept_language: "ja-JP,ja;q=0.9,en;q=0.8"
-      # 桌面 User-Agent
+      # Desktop User-Agents.
       desktop_user_agents:
         - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      # 移动 User-Agent (日本常用 iPhone)
+      # Mobile User-Agents.
       mobile_user_agents:
         - "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
         - "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
@@ -95,18 +95,18 @@ region:
       locale: "en-US"
       timezone: "America/New_York"
       accept_language: "en-US,en;q=0.9"
-      # 桌面 User-Agent
+      # Desktop User-Agents.
       desktop_user_agents:
         - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      # 移动 User-Agent
+      # Mobile User-Agents.
       mobile_user_agents:
         - "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
         - "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
         - "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         - "Mozilla/5.0 (Linux; Android 14; SM-S928U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-# HTTP 配置
+# HTTP config.
 http:
-  timeout: 30          # 请求超时（秒）
+  timeout: 30          # Request timeout in seconds.

@@ -1,6 +1,6 @@
 """
-IP地理位置查询模块
-根据代理IP自动识别地区并设置环境
+IP geolocation lookup module.
+Detects an appropriate runtime region from a proxy IP.
 """
 
 import requests
@@ -8,17 +8,16 @@ import requests
 
 def get_ip_location(ip_address):
     """
-    查询IP地址的地理位置
+    Query geolocation for an IP address.
     
     Args:
-        ip_address: IP地址字符串
+        ip_address: IP address string.
     
     Returns:
-        dict: 包含国家代码、国家名、时区等信息
-              例如: {'country_code': 'US', 'country': 'United States', 'timezone': 'America/New_York'}
-              失败返回None
+        dict with country code, country name, timezone, and other metadata.
+        Returns None on failure.
     """
-    # 尝试多个免费IP查询服务
+    # Try multiple free IP lookup services.
     services = [
         {
             'name': 'ip-api.com',
@@ -39,7 +38,7 @@ def get_ip_location(ip_address):
     
     for service in services:
         try:
-            print(f"🔍 正在查询IP地理位置 ({service['name']})...")
+            print(f"🔍 Querying IP location ({service['name']})...")
             response = requests.get(service['url'], timeout=5)
             
             if response.status_code == 200:
@@ -47,18 +46,18 @@ def get_ip_location(ip_address):
                 result = service['parser'](data)
                 
                 if result and result.get('country_code'):
-                    print(f"✅ IP地理位置: {result.get('country')} ({result.get('country_code')})")
+                    print(f"✅ IP location: {result.get('country')} ({result.get('country_code')})")
                     return result
         except Exception as e:
-            print(f"   跳过 {service['name']}: {e}")
+            print(f"   Skipping {service['name']}: {e}")
             continue
     
-    print("⚠️  无法查询IP地理位置，将使用默认设置")
+    print("⚠️  Could not query IP location; using defaults")
     return None
 
 
 def parse_ipapi(data):
-    """解析 ip-api.com 的返回数据"""
+    """Parse ip-api.com response data."""
     if data.get('status') != 'success':
         return None
     
@@ -73,7 +72,7 @@ def parse_ipapi(data):
 
 
 def parse_ipapico(data):
-    """解析 ipapi.co 的返回数据"""
+    """Parse ipapi.co response data."""
     return {
         'country_code': data.get('country_code', ''),
         'country': data.get('country_name', ''),
@@ -85,7 +84,7 @@ def parse_ipapico(data):
 
 
 def parse_ipwhois(data):
-    """解析 ipwhois.app 的返回数据"""
+    """Parse ipwhois.app response data."""
     if not data.get('success'):
         return None
     
@@ -101,31 +100,31 @@ def parse_ipwhois(data):
 
 def map_country_to_region(country_code):
     """
-    将国家代码映射到我们配置的地区
+    Map a country code to a configured region.
     
     Args:
-        country_code: 两字母国家代码（如 US, DE, JP）
+        country_code: Two-letter country code, such as US, DE, or JP.
     
     Returns:
-        str: 地区名称 ('usa', 'germany', 'japan' 等)，未知返回 'usa'
+        Region name. Unknown countries map to 'usa'.
     """
-    # 国家代码到地区的映射
+    # Country code to region mapping.
     mapping = {
-        # 德国和德语区
+        # Germany and German-speaking regions.
         'DE': 'germany',
-        'AT': 'germany',  # 奥地利，也用德语
-        'CH': 'germany',  # 瑞士（部分德语区）
+        'AT': 'germany',
+        'CH': 'germany',
         
-        # 日本
+        # Japan.
         'JP': 'japan',
         
-        # 美国和英语区
+        # United States and English-speaking regions.
         'US': 'usa',
-        'CA': 'usa',  # 加拿大
-        'GB': 'usa',  # 英国
-        'AU': 'usa',  # 澳大利亚
-        'NZ': 'usa',  # 新西兰
-        'IE': 'usa',  # 爱尔兰
+        'CA': 'usa',
+        'GB': 'usa',
+        'AU': 'usa',
+        'NZ': 'usa',
+        'IE': 'usa',
     }
     
     region = mapping.get(country_code.upper(), 'usa')
@@ -134,17 +133,17 @@ def map_country_to_region(country_code):
 
 def get_region_config_from_ip(ip_address):
     """
-    根据IP地址获取推荐的地区配置
+    Get recommended region config from an IP address.
     
     Args:
-        ip_address: IP地址
+        ip_address: IP address.
     
     Returns:
         dict: {
-            'region': 地区名称,
-            'country_code': 国家代码,
-            'country': 国家名称,
-            'timezone': 时区,
+            'region': region name,
+            'country_code': country code,
+            'country': country name,
+            'timezone': timezone,
             ...
         }
     """
@@ -173,25 +172,25 @@ def get_region_config_from_ip(ip_address):
 
 def extract_ip_from_proxy_url(proxy_url):
     """
-    从代理URL中提取IP地址
+    Extract an IP address from a proxy URL.
     
     Args:
-        proxy_url: 代理URL，如 http://1.2.3.4:8080 或 http://user:pass@1.2.3.4:8080
+        proxy_url: Proxy URL, such as http://1.2.3.4:8080 or http://user:pass@1.2.3.4:8080.
     
     Returns:
-        str: IP地址，失败返回None
+        IP address, or None on failure.
     """
     try:
-        # 移除协议前缀
+        # Remove protocol prefix.
         url = proxy_url
         if '://' in url:
             url = url.split('://')[1]
         
-        # 移除认证信息
+        # Remove auth info.
         if '@' in url:
             url = url.split('@')[1]
         
-        # 提取IP（去掉端口）
+        # Extract IP and strip port.
         ip = url.split(':')[0]
         
         return ip
