@@ -2,6 +2,8 @@ import random
 import time
 from typing import Any
 
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 
 
@@ -43,3 +45,46 @@ def click_element(driver: Any, element: Any) -> None:
             element.click()
         except Exception:
             driver.execute_script("arguments[0].click();", element)
+
+
+def safe_input(
+    wait: Any,
+    selector: tuple[str, str],
+    value: str,
+    *,
+    max_retries: int = 3,
+) -> bool:
+    """Fill an input with stale-element retries."""
+
+    for attempt in range(max_retries):
+        try:
+            element = wait.until(EC.presence_of_element_located(selector))
+            element.click()
+            jitter_delay(0.3, 0.8)
+            element.clear()
+            type_text(element, value)
+            return True
+        except Exception:
+            if attempt < max_retries - 1:
+                print(f"   Input retry {attempt + 1}/{max_retries}...")
+                jitter_delay(1, 2)
+            else:
+                raise
+    return False
+
+
+def page_contains_any(driver: Any, needles: list[str]) -> bool:
+    """Best-effort page text check without failing the run."""
+
+    try:
+        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    except Exception:
+        page_text = ""
+
+    haystack = " ".join([
+        str(getattr(driver, "current_url", "")),
+        str(getattr(driver, "title", "")),
+        page_text,
+    ]).lower()
+
+    return any(needle.lower() in haystack for needle in needles)
