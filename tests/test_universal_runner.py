@@ -1,11 +1,19 @@
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from core.storage import append_jsonl, read_jsonl
 from runners.main import _normalize_target_name
 from services.email_service import message_matches_filters
-from targets.web_signup import _markers, _selectors, load_web_signup_config
+from targets.web_signup import (
+    _markers,
+    _selectors,
+    execute_web_signup_steps,
+    load_web_signup_config,
+)
 from targets.generic_signup import _render_value
 from targets.registry import get_target, list_targets
 
@@ -47,8 +55,127 @@ class UniversalRunnerTests(unittest.TestCase):
         target_config = load_web_signup_config()
 
         self.assertEqual(target_config["start_url"], "https://builder.aws.com/start")
+        self.assertEqual(
+            [step["action"] for step in target_config["steps"]],
+            [
+                "open_start_page",
+                "dismiss_cookies",
+                "enter_signup_flow",
+                "submit_email",
+                "submit_name",
+                "fetch_and_submit_otp",
+                "set_password",
+                "detect_result",
+            ],
+        )
         self.assertIn("email_input_css", _selectors(target_config))
         self.assertIn("account created", _markers(target_config, "success"))
+
+    def test_web_signup_config_validates_only_selected_steps(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "minimal_web_signup.yaml"
+            path.write_text(
+                "\n".join([
+                    "name: minimal_web_signup",
+                    "steps:",
+                    "  - action: open_start_page",
+                    "    url: https://example.test",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+
+            target_config = load_web_signup_config(path)
+
+        self.assertEqual(target_config["steps"][0]["action"], "open_start_page")
+
+    def test_web_signup_steps_execute_from_config_order(self):
+        target_config = {
+            "start_url": "https://example.test",
+            "selectors": {
+                "email_input_css": "input[type=email]",
+                "primary_button_css": "button",
+                "name_input_css": "input[name=name]",
+                "otp_input_css": "input[name=otp]",
+                "password_input_css": "input[type=password]",
+            },
+            "steps": [
+                {"action": "open_start_page"},
+                {"action": "dismiss_cookies"},
+                {"action": "enter_signup_flow"},
+                {"action": "submit_email"},
+                {"action": "submit_name"},
+                {"action": "fetch_and_submit_otp"},
+                {"action": "set_password"},
+                {"action": "detect_result"},
+            ],
+        }
+        runtime = {
+            "fixed_account": None,
+            "email_address": "user@example.test",
+            "jwt_token": "jwt",
+            "email_filters": {},
+            "success_markers": [],
+            "blocking_markers": [],
+            "output_file": "accounts.jsonl",
+        }
+        calls = []
+
+        with (
+            redirect_stdout(io.StringIO()),
+            patch(
+                "targets.web_signup.open_start_page",
+                side_effect=lambda *args, **kwargs: calls.append("open_start_page"),
+            ),
+            patch(
+                "targets.web_signup.dismiss_cookies",
+                side_effect=lambda *args, **kwargs: calls.append("dismiss_cookies") or True,
+            ),
+            patch(
+                "targets.web_signup.enter_signup_flow",
+                side_effect=lambda *args, **kwargs: calls.append("enter_signup_flow") or True,
+            ),
+            patch(
+                "targets.web_signup.submit_email",
+                side_effect=lambda *args, **kwargs: calls.append("submit_email"),
+            ),
+            patch(
+                "targets.web_signup.submit_name",
+                side_effect=lambda *args, **kwargs: calls.append("submit_name") or "Example User",
+            ),
+            patch(
+                "targets.web_signup.fetch_and_submit_otp",
+                side_effect=lambda *args, **kwargs: calls.append("fetch_and_submit_otp") or "123456",
+            ),
+            patch(
+                "targets.web_signup.set_password",
+                side_effect=lambda *args, **kwargs: calls.append("set_password") or ("Passw0rd!", True),
+            ),
+            patch(
+                "targets.web_signup.detect_result",
+                side_effect=lambda *args, **kwargs: calls.append("detect_result") or "registered",
+            ),
+        ):
+            execute_web_signup_steps(object(), object(), target_config, runtime)
+
+        self.assertEqual(
+            calls,
+            [
+                "open_start_page",
+                "dismiss_cookies",
+                "enter_signup_flow",
+                "submit_email",
+                "submit_name",
+                "fetch_and_submit_otp",
+                "set_password",
+                "detect_result",
+            ],
+        )
+        self.assertEqual(runtime["random_name"], "Example User")
+        self.assertEqual(runtime["verification_code"], "123456")
+        self.assertEqual(runtime["password"], "Passw0rd!")
+        self.assertTrue(runtime["password_submitted"])
+        self.assertEqual(runtime["status"], "registered")
 
     def test_email_filters_are_configurable(self):
         filters = {

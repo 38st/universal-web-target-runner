@@ -10,6 +10,7 @@ import random
 import json
 import os
 from datetime import datetime
+from typing import Any
 from config import REGION_CURRENT
 from core.actions import (
     click_element as human_click,
@@ -33,13 +34,22 @@ fake = Faker('en_US')
 DEFAULT_TARGET_CONFIG_PATH = "config/targets/aws_builder_id.yaml"
 TARGET_CONFIG_ENV = "WEB_SIGNUP_CONFIG"
 LEGACY_TARGET_CONFIG_ENV = "AWS_BUILDER_CONFIG"
-REQUIRED_SELECTOR_KEYS = (
-    "email_input_css",
-    "primary_button_css",
-    "name_input_css",
-    "otp_input_css",
-    "password_input_css",
-)
+SUPPORTED_STEP_ACTIONS = {
+    "open_start_page",
+    "dismiss_cookies",
+    "enter_signup_flow",
+    "submit_email",
+    "submit_name",
+    "fetch_and_submit_otp",
+    "set_password",
+    "detect_result",
+}
+STEP_SELECTOR_REQUIREMENTS = {
+    "submit_email": ("email_input_css", "primary_button_css"),
+    "submit_name": ("name_input_css",),
+    "fetch_and_submit_otp": ("otp_input_css",),
+    "set_password": ("password_input_css",),
+}
 
 
 def _as_list(value):
@@ -69,10 +79,32 @@ def load_web_signup_config(config_path=None):
 
 def _validate_web_signup_config(target_config, path):
     selectors = _selectors(target_config)
+    steps = _steps(target_config)
     missing = []
-    if not target_config.get("start_url"):
-        missing.append("start_url")
-    missing.extend(f"selectors.{key}" for key in REQUIRED_SELECTOR_KEYS if not selectors.get(key))
+    if not isinstance(steps, list) or not steps:
+        missing.append("steps")
+    else:
+        for index, raw_step in enumerate(steps, start=1):
+            step = _normalize_step(raw_step, index)
+            if not _step_enabled(step):
+                continue
+
+            action = step["action"]
+            if action not in SUPPORTED_STEP_ACTIONS:
+                raise ValueError(
+                    f"Web signup target config {path} has unsupported step action "
+                    f"at steps[{index}]: {action}"
+                )
+
+            if action == "open_start_page" and not (step.get("url") or target_config.get("start_url")):
+                missing.append(f"start_url or steps[{index}].url")
+
+            missing.extend(
+                f"selectors.{key} for step {index} ({action})"
+                for key in STEP_SELECTOR_REQUIREMENTS.get(action, ())
+                if not selectors.get(key)
+            )
+
     if missing:
         missing_text = ", ".join(missing)
         raise ValueError(f"Web signup target config {path} is missing: {missing_text}")
@@ -84,6 +116,30 @@ def _selectors(target_config):
 
 def _markers(target_config, key):
     return _as_list((target_config.get("markers") or {}).get(key))
+
+
+def _steps(target_config):
+    return target_config.get("steps") or []
+
+
+def _normalize_step(raw_step: Any, index: int) -> dict[str, Any]:
+    if isinstance(raw_step, str):
+        step = {"action": raw_step}
+    elif isinstance(raw_step, dict):
+        step = dict(raw_step)
+    else:
+        raise ValueError(f"Web signup step {index} must be a string or mapping")
+
+    action = str(step.get("action", "")).strip()
+    if not action:
+        raise ValueError(f"Web signup step {index} is missing action")
+
+    step["action"] = action.lower().replace("-", "_")
+    return step
+
+
+def _step_enabled(step):
+    return step.get("enabled", True) is not False
 
 
 def generate_strong_password():
@@ -157,11 +213,13 @@ def save_account_info(email, password, name, jwt_token):
     print(f"Account info saved to {accounts_file}")
 
 
-def open_start_page(driver, target_config):
+def open_start_page(driver, target_config, step=None):
     """Open the target start URL and let the page settle."""
 
+    step = step or {}
+    start_url = step.get("url") or target_config.get("start_url")
     print("\nOpening start page...")
-    driver.get(target_config.get("start_url"))
+    driver.get(start_url)
     human_delay(2, 3)
     print(f"Page title: {driver.title}")
 
@@ -361,10 +419,10 @@ def submit_email(driver, wait, selectors, email_address):
     driver.save_screenshot("screenshot.png")
 
 
-def submit_name(driver, wait, selectors):
+def submit_name(driver, wait, selectors, name=None):
     """Submit a generated display name and wait for the OTP step."""
 
-    random_name = fake.name()
+    random_name = name or fake.name()
     print(f"Typing name: {random_name}")
 
     driver.execute_script("window.scrollBy(0, 10)")
@@ -591,7 +649,7 @@ def fetch_and_submit_otp(driver, wait, selectors, *, fixed_account, email_filter
     return verification_code
 
 
-def set_password(driver, selectors):
+def set_password(driver, selectors, password=None):
     """Generate and submit a password when the password step is present."""
 
     print("Preparing password step...")
@@ -599,7 +657,7 @@ def set_password(driver, selectors):
     driver.save_screenshot("screenshot.png")
     print(f"Current URL: {driver.current_url}")
 
-    password = generate_strong_password()
+    password = password or generate_strong_password()
     password_submitted = False
     print("Generated password: [redacted]")
 
@@ -711,9 +769,83 @@ def detect_result(
     return "unconfirmed"
 
 
+def execute_web_signup_steps(driver, wait, target_config, runtime):
+    """Execute semantic web signup steps defined by target YAML."""
+
+    selectors = _selectors(target_config)
+    steps = _steps(target_config)
+
+    for index, raw_step in enumerate(steps, start=1):
+        step = _normalize_step(raw_step, index)
+        if not _step_enabled(step):
+            print(f"\nSkipping disabled workflow step {index}/{len(steps)}: {step['action']}")
+            continue
+
+        action = step["action"]
+        print(f"\nWorkflow step {index}/{len(steps)}: {action}")
+
+        try:
+            if action == "open_start_page":
+                open_start_page(driver, target_config, step=step)
+            elif action == "dismiss_cookies":
+                runtime["cookie_closed"] = dismiss_cookies(driver, selectors)
+            elif action == "enter_signup_flow":
+                runtime["signup_clicked"] = enter_signup_flow(driver, selectors)
+            elif action == "submit_email":
+                email_address = runtime.get("email_address")
+                if not email_address:
+                    raise ValueError("submit_email requires runtime email_address")
+                submit_email(driver, wait, selectors, email_address)
+            elif action == "submit_name":
+                runtime["random_name"] = submit_name(
+                    driver,
+                    wait,
+                    selectors,
+                    name=step.get("value") or step.get("name"),
+                )
+            elif action == "fetch_and_submit_otp":
+                runtime["verification_code"] = fetch_and_submit_otp(
+                    driver,
+                    wait,
+                    selectors,
+                    fixed_account=runtime.get("fixed_account"),
+                    email_filters=runtime.get("email_filters") or {},
+                    jwt_token=runtime.get("jwt_token"),
+                )
+            elif action == "set_password":
+                password, password_submitted = set_password(
+                    driver,
+                    selectors,
+                    password=step.get("value") or step.get("password"),
+                )
+                runtime["password"] = password
+                runtime["password_submitted"] = password_submitted
+            elif action == "detect_result":
+                runtime["status"] = detect_result(
+                    driver,
+                    email_address=runtime.get("email_address"),
+                    password=runtime.get("password"),
+                    random_name=runtime.get("random_name"),
+                    jwt_token=runtime.get("jwt_token"),
+                    verification_code=runtime.get("verification_code"),
+                    password_submitted=runtime.get("password_submitted", False),
+                    success_markers=runtime.get("success_markers") or [],
+                    blocking_markers=runtime.get("blocking_markers") or [],
+                    output_file=runtime.get("output_file", "accounts.jsonl"),
+                )
+            else:
+                raise ValueError(f"Unsupported web signup step action: {action}")
+        except Exception as e:
+            if step.get("optional") is True:
+                print(f"⚠️ Optional workflow step failed ({action}): {e}")
+                continue
+            raise
+
+    return runtime
+
+
 def run(fixed_account=None, target_config_path=None):
     target_config = load_web_signup_config(target_config_path)
-    selectors = _selectors(target_config)
     email_filters = target_config.get("email") or {}
     output_file = target_config.get("output_file", "accounts.jsonl")
     success_markers = _markers(target_config, "success")
@@ -748,10 +880,19 @@ def run(fixed_account=None, target_config_path=None):
         print("Mailbox creation failed; exiting")
         return
 
-    password = None
-    random_name = None
-    verification_code = None
-    password_submitted = False
+    runtime = {
+        "fixed_account": fixed_account,
+        "email_address": email_address,
+        "jwt_token": jwt_token,
+        "email_filters": email_filters,
+        "password": None,
+        "random_name": None,
+        "verification_code": None,
+        "password_submitted": False,
+        "success_markers": success_markers,
+        "blocking_markers": blocking_markers,
+        "output_file": output_file,
+    }
 
     profile_prefix = target_config.get("profile_prefix", "web_signup_")
     session = None
@@ -772,46 +913,21 @@ def run(fixed_account=None, target_config_path=None):
         return
 
     try:
-        open_start_page(driver, target_config)
-        dismiss_cookies(driver, selectors)
-        enter_signup_flow(driver, selectors)
-        submit_email(driver, wait, selectors, email_address)
-        random_name = submit_name(driver, wait, selectors)
-        verification_code = fetch_and_submit_otp(
-            driver,
-            wait,
-            selectors,
-            fixed_account=fixed_account,
-            email_filters=email_filters,
-            jwt_token=jwt_token,
-        )
-        password, password_submitted = set_password(driver, selectors)
-        detect_result(
-            driver,
-            email_address=email_address,
-            password=password,
-            random_name=random_name,
-            jwt_token=jwt_token,
-            verification_code=verification_code,
-            password_submitted=password_submitted,
-            success_markers=success_markers,
-            blocking_markers=blocking_markers,
-            output_file=output_file,
-        )
+        execute_web_signup_steps(driver, wait, target_config, runtime)
 
     except Exception as e:
         print(f"Run error: {e}")
         try:
             driver.save_screenshot("error_screenshot.png")
-            if email_address and password:
+            if runtime.get("email_address") and runtime.get("password"):
                 save_account(
-                    email_address,
-                    password,
-                    random_name or "Unknown",
-                    jwt_token if 'jwt_token' in locals() else "",
+                    runtime["email_address"],
+                    runtime["password"],
+                    runtime.get("random_name") or "Unknown",
+                    runtime.get("jwt_token") or "",
                     status="partial_error",
                     notes=str(e),
-                    output_file=output_file if 'output_file' in locals() else "accounts.jsonl",
+                    output_file=runtime.get("output_file", "accounts.jsonl"),
                 )
                 print("⚠️  Partial error row saved")
         except: pass

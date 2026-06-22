@@ -85,6 +85,20 @@ The `web_signup` target also supports:
 - `WEB_SIGNUP_CONFIG`: preferred env var for its config path
 - `AWS_BUILDER_CONFIG`: legacy fallback env var
 
+`web_signup` runs the semantic workflow listed in the target config `steps:` block. The included example uses:
+
+```yaml
+steps:
+  - action: open_start_page
+  - action: dismiss_cookies
+  - action: enter_signup_flow
+  - action: submit_email
+  - action: submit_name
+  - action: fetch_and_submit_otp
+  - action: set_password
+  - action: detect_result
+```
+
 ## Output
 
 Target results are written to the JSONL file configured by the selected target. The included `web_signup` example writes to `accounts.jsonl`.

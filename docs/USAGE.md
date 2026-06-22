@@ -84,6 +84,24 @@ Run several attempts:
 python src/runners/batch_run.py --target web_signup --count 5
 ```
 
+## Web Signup Steps
+
+The `web_signup` target reads its workflow order from the selected target config:
+
+```yaml
+steps:
+  - action: open_start_page
+  - action: dismiss_cookies
+  - action: enter_signup_flow
+  - action: submit_email
+  - action: submit_name
+  - action: fetch_and_submit_otp
+  - action: set_password
+  - action: detect_result
+```
+
+Each step is optional from the runner's perspective, but steps that are present must have the selectors they need. For example, `submit_email` requires `selectors.email_input_css` and `selectors.primary_button_css`; `set_password` requires `selectors.password_input_css`.
+
 ## Email Service
 
 The temporary mailbox integration expects a deployed email worker. Configure:

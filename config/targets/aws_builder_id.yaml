@@ -3,6 +3,16 @@ start_url: "https://builder.aws.com/start"
 profile_prefix: "web_signup_"
 output_file: "accounts.jsonl"
 
+steps:
+  - action: open_start_page
+  - action: dismiss_cookies
+  - action: enter_signup_flow
+  - action: submit_email
+  - action: submit_name
+  - action: fetch_and_submit_otp
+  - action: set_password
+  - action: detect_result
+
 email:
   sender_contains:
     - "amazon"
