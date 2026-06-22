@@ -1,65 +1,158 @@
+"""
+batch_run: sequential multi-run loop for a configured target.
+
+Usage:
+    python -m runners.batch_run --target aws_builder --count 10
+"""
+
 import sys
+import time
+import json
+import argparse
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import time
-import random
-from multiprocessing import Pool, freeze_support
-from runners.main import run
-from services.outlook_accounts import OUTLOOK_ACCOUNTS
+# Monkey-patch undetected_chromedriver.patcher.Patcher.auto() to prevent
+# re-download of ChromeDriver on every launch (must precede any uc import).
+import patch_uc  # noqa: F401
 
-def run_wrapper(i):
-    """包装函数，用于在进程中运行"""
-    # 确保索引不越界
-    if i >= len(OUTLOOK_ACCOUNTS):
-        print(f"❌ 进程 {i+1} 跳过: 没有更多可用的账号")
+from datetime import datetime
+
+
+def batch_run(count: int = 5,
+              stagger: int = 25,
+              target_name: str = "aws_builder",
+              target_config: str | None = None,
+              proxy_ok: bool = False,
+              proxy_url: str | None = None):
+    """
+    Run N signup flows sequentially.
+
+    Args:
+        count:       Number of target run attempts.
+        stagger:     Seconds to wait between each run start.
+        target_name: Target adapter name.
+        target_config: Optional target-specific YAML config.
+        proxy_ok:      If True, skip proxy probe (already validated).
+        proxy_url:     Pre-resolved proxy URL (pass through to main).
+    """
+    from runners.main import run
+
+    print(f"\n{'=' * 60}")
+    print(f"   BATCH RUNNER — {count} runs")
+    print(f"   Target:  {target_name}")
+    print(f"   Stagger: {stagger}s between runs")
+    print(f"   Email:   configured email backend")
+    print(f"   Proxy:   {'enabled' if proxy_url else 'configured per target/run'}")
+    print(f"{'=' * 60}\n")
+
+    results = []
+    start_time = time.time()
+
+    for i in range(1, count + 1):
+        print(f"\n{'─' * 50}")
+        print(f"   Run {i}/{count}")
+        print(f"{'─' * 50}")
+
+        account_start = time.time()
+
+        try:
+            run(target_name=target_name, target_config=target_config)
+        except KeyboardInterrupt:
+            print("\n\nInterrupted by user.")
+            break
+        except Exception as e:
+            print(f"\nAccount {i} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            results.append({
+                "run": i,
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+            })
+            # Write partial report so progress is visible
+            _write_batch_report(results)
+            _maybe_wait_stagger(i, count, stagger, account_start)
+            continue
+
+        elapsed = time.time() - account_start
+        print(f"\nRun {i} done in {elapsed:.0f}s")
+
+        results.append({
+            "run": i,
+            "status": "done",
+            "elapsed_s": round(elapsed),
+            "timestamp": datetime.now().isoformat(),
+        })
+        _write_batch_report(results)
+
+        _maybe_wait_stagger(i, count, stagger, account_start)
+
+    total_time = time.time() - start_time
+    successes = sum(1 for r in results if r["status"] == "done")
+    failures = sum(1 for r in results if r["status"] == "error")
+
+    print(f"\n{'=' * 60}")
+    print(f"   BATCH COMPLETE")
+    print(f"   Total time: {total_time:.0f}s ({total_time / 60:.1f}m)")
+    print(f"   Successes:  {successes}/{count}")
+    print(f"   Failures:   {failures}/{count}")
+    print(f"   Output:     accounts.jsonl")
+    print(f"{'=' * 60}\n")
+
+    _write_batch_report(results)
+    return results
+
+
+def _maybe_wait_stagger(current_run: int, total: int, stagger: int, run_start: float):
+    """Wait remaining stagger time if not the last run."""
+    if current_run >= total:
         return
+    elapsed = time.time() - run_start
+    wait = max(0, stagger - elapsed)
+    if wait > 0:
+        print(f"\n⏳ Waiting {wait:.0f}s before next run...")
+        try:
+            time.sleep(wait)
+        except KeyboardInterrupt:
+            raise
 
-    account = OUTLOOK_ACCOUNTS[i]
-    print(f"🚀 进程 {i+1} 准备启动 (账号: {account['email']})...")
-    
+
+def _write_batch_report(results: list):
+    """Write batch_report.jsonl with run-level results."""
+    with open("batch_report.jsonl", "w", encoding="utf-8") as f:
+        for r in results:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Batch target runner")
+    parser.add_argument("--target", default="aws_builder",
+                        help="Target adapter to run (default: aws_builder)")
+    parser.add_argument("--target-config",
+                        help="Path to a target-specific YAML config")
+    parser.add_argument("--count", type=int, default=5,
+                        help="Number of runs to execute (default: 5)")
+    parser.add_argument("--stagger", type=int, default=25,
+                        help="Seconds between runs (default: 25)")
+    args = parser.parse_args()
+
+    if args.count < 1:
+        print("Count must be >= 1")
+        sys.exit(1)
+
     try:
-        # 增加延迟到 20 秒，确保 undetected_chromedriver 完成驱动文件打补丁，防止 WinError 183 文件锁冲突
-        delay = i * 20
-        if delay > 0:
-            print(f"⏳ 进程 {i+1} 将在 {delay} 秒后启动...")
-            time.sleep(delay)
-            
-        print(f"🎬 进程 {i+1} 正式开始运行")
-        # 传递固定账号
-        run(fixed_account=account)
-        
-    except Exception as e:
-        print(f"❌ 进程 {i+1} 异常: {e}")
-    finally:
-        print(f"🏁 进程 {i+1} 结束")
+        batch_run(
+            count=args.count,
+            stagger=args.stagger,
+            target_name=args.target,
+            target_config=args.target_config,
+        )
+    except KeyboardInterrupt:
+        print("\nBatch cancelled.")
+        sys.exit(0)
 
-def batch_run(count=None):
-    """
-    并发执行批量任务
-    :param count: 并发数量 (默认使用账号列表长度)
-    """
-    if count is None:
-        count = len(OUTLOOK_ACCOUNTS)
-        
-    print(f"🚀 开始多进程批量注册，并发数量: {count}")
-    print(f"📋 使用 Outlook 账号列表 ({len(OUTLOOK_ACCOUNTS)} 个)")
-    print("⚠️ 注意：这将同时打开多个浏览器窗口，请确保内存充足")
-    print("⚠️ 结果将保存到 accounts.jsonl (每行一条)")
-    
-    # 稍微等待一下让用户看清提示
-    time.sleep(2)
-
-    # 这里的 processes=count 就是并发数
-    with Pool(processes=count) as pool:
-        # 创建任务列表
-        # 使用 count 数量，最大不超过账号总数
-        actual_count = min(count, len(OUTLOOK_ACCOUNTS))
-        pool.map(run_wrapper, range(actual_count))
-        
-    print("\n🎉 所有并发任务已完成！")
 
 if __name__ == "__main__":
-    freeze_support() # Windows 必须
-    # 默认跑完所有账号
-    batch_run()
+    main()

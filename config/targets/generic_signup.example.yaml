@@ -1,0 +1,16 @@
+name: local_demo_signup
+authorized: true
+use_configured_proxy: false
+
+variables:
+  email: "user@example.test"
+  name: "Example User"
+
+steps:
+  - action: goto
+    url: "https://example.com"
+  - action: wait
+    by: css
+    selector: "body"
+  - action: screenshot
+    path: "generic_signup_example.png"
