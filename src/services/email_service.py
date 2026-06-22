@@ -24,6 +24,42 @@ from config import (
 from helpers.utils import http_session, get_user_agent, extract_verification_code
 
 
+DEFAULT_VERIFICATION_FILTERS = {
+    "sender_contains": ["amazon", "aws"],
+    "subject_contains": ["verify"],
+    "body_contains": ["amazon", "aws", "verify"],
+}
+
+
+def _contains_any(text: str, values: list[str]) -> bool:
+    haystack = (text or "").lower()
+    return any(str(value).lower() in haystack for value in values if value)
+
+
+def message_matches_filters(
+    *,
+    sender: str = "",
+    subject: str = "",
+    body: str = "",
+    filters: dict | None = None,
+) -> bool:
+    """Return True when a message matches configured verification filters."""
+
+    active_filters = DEFAULT_VERIFICATION_FILTERS if filters is None else filters
+    sender_contains = list(active_filters.get("sender_contains") or [])
+    subject_contains = list(active_filters.get("subject_contains") or [])
+    body_contains = list(active_filters.get("body_contains") or [])
+
+    if not sender_contains and not subject_contains and not body_contains:
+        return True
+
+    return (
+        _contains_any(sender, sender_contains)
+        or _contains_any(subject, subject_contains)
+        or _contains_any(body, body_contains)
+    )
+
+
 def create_temp_email():
     """
     创建临时邮箱
@@ -150,7 +186,7 @@ def parse_raw_email(raw_content: str):
     return result
 
 
-def wait_for_verification_email(jwt_token: str, timeout: int = None):
+def wait_for_verification_email(jwt_token: str, timeout: int = None, filters: dict | None = None):
     """
     等待并提取验证码
     返回: 验证码字符串，未找到返回 None
@@ -177,8 +213,7 @@ def wait_for_verification_email(jwt_token: str, timeout: int = None):
                     subject = email_item.get('subject', '') or ''
                     body = ''
                 
-                # 判断是否为 AWS 验证邮件
-                if 'amazon' in sender or 'aws' in sender or 'verify' in subject.lower():
+                if message_matches_filters(sender=sender, subject=subject, body=body, filters=filters):
                     print(f"\n收到验证邮件!")
                     print(f"   主题: {subject}")
                     

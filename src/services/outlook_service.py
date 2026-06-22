@@ -5,6 +5,8 @@ import re
 import time
 from email.header import decode_header
 
+from services.email_service import message_matches_filters
+
 # Microsoft OAuth Endpoint
 TENANT_ID = 'common'
 TOKEN_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
@@ -36,12 +38,13 @@ def get_access_token(refresh_token, client_id):
 def generate_auth_string(user, token):
     return f"user={user}\1auth=Bearer {token}\1\1"
 
-def extract_aws_code_from_email(msg):
+def extract_aws_code_from_email(msg, filters=None):
     """从邮件对象中提取 AWS 验证码"""
     try:
         subject = decode_header(msg["subject"])[0][0]
         if isinstance(subject, bytes):
             subject = subject.decode(errors='ignore')
+        sender = str(msg.get("From", ""))
             
         body = ""
         if msg.is_multipart():
@@ -60,8 +63,7 @@ def extract_aws_code_from_email(msg):
             
         full_text = f"{subject} {body}"
         
-        # 匹配 AWS 6位验证码
-        if "AWS" in full_text or "Amazon" in full_text:
+        if message_matches_filters(sender=sender, subject=subject, body=body, filters=filters):
             match = re.search(r'\b(\d{6})\b', full_text)
             if match:
                 return match.group(1)
@@ -69,7 +71,7 @@ def extract_aws_code_from_email(msg):
         print(f"解析邮件出错: {e}")
     return None
 
-def get_verification_code_via_imap(email_address, access_token, timeout=120):
+def get_verification_code_via_imap(email_address, access_token, timeout=120, filters=None):
     """
     通过 IMAP 获取 AWS 验证码 (轮询)
     """
@@ -104,7 +106,7 @@ def get_verification_code_via_imap(email_address, access_token, timeout=120):
                             status, msg_data = mail.fetch(msg_id, '(RFC822)')
                             if status == "OK":
                                 msg = email.message_from_bytes(msg_data[0][1])
-                                code = extract_aws_code_from_email(msg)
+                                code = extract_aws_code_from_email(msg, filters=filters)
                                 if code:
                                     print(f"✅ 成功提取 Outlook 验证码: {code}")
                                     return code
@@ -123,7 +125,7 @@ def get_verification_code_via_imap(email_address, access_token, timeout=120):
     print("❌ 等待 Outlook 邮件超时")
     return None
 
-def get_verification_code_from_outlook(account_info):
+def get_verification_code_from_outlook(account_info, filters=None):
     """
     主入口
     :param account_info: 包含 email, client_id, refresh_token 的字典
@@ -141,7 +143,7 @@ def get_verification_code_from_outlook(account_info):
     
     if access_token:
         print("✅ Access Token 获取成功")
-        return get_verification_code_via_imap(email_addr, access_token)
+        return get_verification_code_via_imap(email_addr, access_token, filters=filters)
     else:
         print("❌ Access Token 获取失败，请检查 Refresh Token 是否过期")
         return None

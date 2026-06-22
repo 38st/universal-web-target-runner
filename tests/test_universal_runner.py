@@ -4,6 +4,8 @@ from pathlib import Path
 
 from core.storage import append_jsonl, read_jsonl
 from runners.main import _normalize_target_name
+from services.email_service import message_matches_filters
+from targets.aws_builder import _markers, _selectors, load_aws_builder_config
 from targets.generic_signup import _render_value
 from targets.registry import get_target, list_targets
 
@@ -36,6 +38,25 @@ class UniversalRunnerTests(unittest.TestCase):
         })
 
         self.assertEqual(rendered, "hello Example User <user@example.test>")
+
+    def test_aws_builder_config_loads_selectors_and_markers(self):
+        target_config = load_aws_builder_config()
+
+        self.assertEqual(target_config["start_url"], "https://builder.aws.com/start")
+        self.assertIn("email_input_css", _selectors(target_config))
+        self.assertIn("account created", _markers(target_config, "success"))
+
+    def test_email_filters_are_configurable(self):
+        filters = {
+            "sender_contains": ["example"],
+            "subject_contains": ["login"],
+            "body_contains": ["approval"],
+        }
+
+        self.assertTrue(message_matches_filters(sender="noreply@example.test", filters=filters))
+        self.assertTrue(message_matches_filters(subject="Login code", filters=filters))
+        self.assertTrue(message_matches_filters(body="Approval code 123456", filters=filters))
+        self.assertFalse(message_matches_filters(sender="other.test", subject="hello", body="nothing", filters=filters))
 
 
 if __name__ == "__main__":

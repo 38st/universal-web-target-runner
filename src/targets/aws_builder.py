@@ -17,6 +17,7 @@ import json
 import os
 from datetime import datetime
 from config import HEADLESS, SLOW_MO
+from core.config_loader import load_yaml_file, resolve_project_path
 from core.context import RunContext
 from services.email_service import create_temp_email, wait_for_verification_email
 from selenium.webdriver.common.action_chains import ActionChains
@@ -24,6 +25,53 @@ from helpers.multilang import lang_selector
 
 
 fake = Faker('en_US')
+DEFAULT_TARGET_CONFIG_PATH = "config/targets/aws_builder.yaml"
+REQUIRED_SELECTOR_KEYS = (
+    "email_input_css",
+    "primary_button_css",
+    "name_input_css",
+    "otp_input_css",
+    "password_input_css",
+)
+
+
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def load_aws_builder_config(config_path=None):
+    """Load AWS Builder target behavior from YAML."""
+
+    selected_path = config_path or os.environ.get("AWS_BUILDER_CONFIG") or DEFAULT_TARGET_CONFIG_PATH
+    path = resolve_project_path(selected_path)
+    if not path.exists():
+        raise FileNotFoundError(f"AWS Builder target config not found: {path}")
+    target_config = load_yaml_file(path)
+    _validate_aws_builder_config(target_config, path)
+    return target_config
+
+
+def _validate_aws_builder_config(target_config, path):
+    selectors = _selectors(target_config)
+    missing = []
+    if not target_config.get("start_url"):
+        missing.append("start_url")
+    missing.extend(f"selectors.{key}" for key in REQUIRED_SELECTOR_KEYS if not selectors.get(key))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"AWS Builder target config {path} is missing: {missing_text}")
+
+
+def _selectors(target_config):
+    return target_config.get("selectors") or {}
+
+
+def _markers(target_config, key):
+    return _as_list((target_config.get("markers") or {}).get(key))
 
 
 def generate_strong_password():
@@ -37,7 +85,7 @@ def generate_strong_password():
     return password
 
 
-def save_account(email, password, name, jwt_token="", status="registered", notes=None):
+def save_account(email, password, name, jwt_token="", status="registered", notes=None, output_file="accounts.jsonl"):
     """Append account row to accounts.jsonl."""
     account_info = {
         "email": email,
@@ -51,12 +99,8 @@ def save_account(email, password, name, jwt_token="", status="registered", notes
     if notes:
         account_info["notes"] = notes
 
-    file_path = "accounts.json"
-    # JSONL append avoids multiprocess clobber
-    file_path = "accounts.jsonl"
-
     try:
-        with open(file_path, "a", encoding="utf-8") as f:
+        with open(output_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(account_info, ensure_ascii=False) + "\n")
         print(f"✅ Account saved: {email}")
     except Exception as e:
@@ -79,34 +123,17 @@ def page_contains_any(driver, needles):
     return any(needle.lower() in haystack for needle in needles)
 
 
-def registration_has_blocking_error(driver):
+def registration_has_blocking_error(driver, blocking_markers=None):
     """Return True when the page exposes an obvious failure state."""
-    return page_contains_any(driver, [
-        "error processing",
-        "try again",
-        "sorry",
-        "invalid",
-        "incorrect",
-        "expired",
-        "blocked",
-        "too many",
-        "captcha",
-        "verification failed",
-    ])
+    return page_contains_any(driver, blocking_markers or [])
 
 
-def registration_looks_successful(driver):
+def registration_looks_successful(driver, success_markers=None, blocking_markers=None):
     """Best-effort success detector used to avoid false registered rows."""
-    positive_markers = [
-        "success",
-        "created",
-        "complete",
-        "welcome",
-        "continue to",
-        "builder id is ready",
-        "account created",
-    ]
-    return page_contains_any(driver, positive_markers) and not registration_has_blocking_error(driver)
+    return (
+        page_contains_any(driver, success_markers or [])
+        and not registration_has_blocking_error(driver, blocking_markers)
+    )
 
 
 def save_account_info(email, password, name, jwt_token):
@@ -186,7 +213,7 @@ def human_click(driver, element):
             driver.execute_script("arguments[0].click();", element)
 
 
-def run(fixed_account=None):
+def run(fixed_account=None, target_config_path=None):
     import undetected_chromedriver as uc
 
     # Late imports (keeps module import light)
@@ -198,6 +225,13 @@ def run(fixed_account=None):
     )
     from services.outlook_service import get_verification_code_from_outlook
     from managers.proxy_manager import proxy_manager
+
+    target_config = load_aws_builder_config(target_config_path)
+    selectors = _selectors(target_config)
+    email_filters = target_config.get("email") or {}
+    output_file = target_config.get("output_file", "accounts.jsonl")
+    success_markers = _markers(target_config, "success")
+    blocking_markers = _markers(target_config, "blocking_errors")
 
     # AUTO_REGION from smart_run, else config
     detected_region = os.environ.get('AUTO_REGION', REGION_CURRENT)
@@ -322,7 +356,8 @@ def run(fixed_account=None):
     import tempfile
     import shutil
 
-    user_data_dir = tempfile.mkdtemp(prefix=f"aws_reg_{random.randint(1000, 9999)}_")
+    profile_prefix = target_config.get("profile_prefix", "aws_reg_")
+    user_data_dir = tempfile.mkdtemp(prefix=f"{profile_prefix}{random.randint(1000, 9999)}_")
     print(f"📁 Temp Chrome profile: {user_data_dir}")
 
     options.add_argument(f"--user-data-dir={user_data_dir}")
@@ -398,7 +433,7 @@ def run(fixed_account=None):
 
     try:
         print("\nOpening AWS Builder...")
-        driver.get("https://builder.aws.com/start")
+        driver.get(target_config.get("start_url"))
         human_delay(2, 3)
         print(f"Page title: {driver.title}")
 
@@ -410,14 +445,7 @@ def run(fixed_account=None):
         # Cookie banner: try several dismiss strategies
         try:
             # Method 1: common Accept buttons
-            accept_selectors = [
-                "//button[text()='Accept']",
-                "//button[contains(text(), 'Accept')]",
-                "//button[@id='awsccc-cb-btn-accept']",
-                "//button[contains(@class, 'awsccc')]",
-                "//div[@id='awsccc-cs-modalcontent']//button[1]",  # first button in cookie modal
-                "//button[contains(@class, 'primary')]",
-            ]
+            accept_selectors = _as_list(selectors.get("cookie_accept_xpaths"))
 
             for selector in accept_selectors:
                 try:
@@ -469,7 +497,7 @@ def run(fixed_account=None):
             try:
                 print("   🔍 Scanning DOM...")
                 # Text may live in descendants; XPath uses .//
-                key_texts = ["Sign up with Builder ID", "Mit Builder-ID anmelden", "Builder ID", "Builder-ID"]
+                key_texts = _as_list(selectors.get("signup_texts"))
 
                 found_elements = []
                 for text in key_texts:
@@ -547,17 +575,13 @@ def run(fixed_account=None):
             print("⚠️  Heuristic scan failed; trying CSS fallbacks...")
             try:
                 # Common AWS-ish selectors
-                css_selectors = [
-                    "a[href*='signup']",
-                    "a[href*='register']",
-                    ".lb-btn-primary",
-                    "button[type='submit']"
-                ]
+                css_selectors = _as_list(selectors.get("signup_fallback_css"))
+                required_text = selectors.get("signup_required_text", "")
                 for css in css_selectors:
                     try:
                         els = driver.find_elements(By.CSS_SELECTOR, css)
                         for el in els:
-                            if el.is_displayed() and "Builder ID" in el.text:
+                            if el.is_displayed() and (not required_text or required_text in el.text):
                                 human_click(driver, el)
                                 human_delay(2, 3)
                                 if driver.current_url != original_url:
@@ -597,14 +621,14 @@ def run(fixed_account=None):
                         raise e
             return False
 
-        safe_input((By.CSS_SELECTOR, 'input[placeholder="username@example.com"]'), email_address)
+        safe_input((By.CSS_SELECTOR, selectors.get("email_input_css")), email_address)
         driver.save_screenshot("screenshot.png")
         print("Email entered")
 
         human_delay(1, 2)
         print("Clicking Continue...")
         continue_btn = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="test-primary-button"]'))
+            EC.element_to_be_clickable((By.CSS_SELECTOR, selectors.get("primary_button_css")))
         )
         continue_btn.click()
 
@@ -622,7 +646,7 @@ def run(fixed_account=None):
         name_input_success = False
         for name_attempt in range(3):
             try:
-                name_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"]')))
+                name_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selectors.get("name_input_css"))))
 
                 name_input.click()
                 human_delay(0.3, 0.5)
@@ -667,11 +691,11 @@ def run(fixed_account=None):
                 continue_btn = None
                 continue_selectors = [
                     lang_selector.get_by_xpath('continue', 'button'),
-                    (By.XPATH, "//button[contains(., 'Continue')]"),
-                    (By.XPATH, "//button[contains(., '继续')]"),
-                    (By.XPATH, "//button[@type='submit']"),
-                    (By.CSS_SELECTOR, '[data-testid="test-primary-button"]'),
                 ]
+                continue_selectors.extend((By.XPATH, xpath) for xpath in _as_list(selectors.get("continue_xpaths")))
+                primary_button_css = selectors.get("primary_button_css")
+                if primary_button_css:
+                    continue_selectors.append((By.CSS_SELECTOR, primary_button_css))
 
                 for selector in continue_selectors:
                     try:
@@ -707,15 +731,7 @@ def run(fixed_account=None):
 
             error_found = False
             try:
-                error_selectors = [
-                    "//*[contains(text(), 'error processing')]",
-                    "//*[contains(text(), 'Error')]",
-                    "//*[contains(text(), 'try again')]",
-                    "//*[contains(text(), 'Sorry')]",
-                    "//*[contains(@class, 'error')]",
-                    "//*[contains(@class, 'alert')]",
-                    "//div[contains(@role, 'alert')]",
-                ]
+                error_selectors = _as_list(selectors.get("page_error_xpaths"))
 
                 for error_xpath in error_selectors:
                     try:
@@ -736,13 +752,7 @@ def run(fixed_account=None):
                 if error_found:
                     # Try closing error dialog
                     try:
-                        close_selectors = [
-                            "//button[contains(@aria-label, 'close')]",
-                            "//button[contains(@class, 'close')]",
-                            "//button[text()='×']",
-                            "//button[text()='OK']",
-                            "//button[text()='确定']",
-                        ]
+                        close_selectors = _as_list(selectors.get("close_error_xpaths"))
                         for close_xpath in close_selectors:
                             try:
                                 close_btn = driver.find_element(By.XPATH, close_xpath)
@@ -784,10 +794,10 @@ def run(fixed_account=None):
 
         try:
             if fixed_account:
-                verification_code = get_verification_code_from_outlook(fixed_account)
+                verification_code = get_verification_code_from_outlook(fixed_account, filters=email_filters)
             else:
                 from services.email_service import wait_for_verification_email
-                verification_code = wait_for_verification_email(jwt_token)
+                verification_code = wait_for_verification_email(jwt_token, filters=email_filters)
         except Exception as e:
             print(f"⚠️  OTP fetch error: {e}")
             verification_code = None
@@ -800,7 +810,7 @@ def run(fixed_account=None):
                 human_delay(4, 6)
 
                 code_input = wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'input[placeholder*="digit"], input[type="text"]'))
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, selectors.get("otp_input_css")))
                 )
 
                 human_delay(1, 2)
@@ -814,12 +824,7 @@ def run(fixed_account=None):
 
                 # Often "Continue" rather than "Verify"
                 verify_clicked = False
-                verify_selectors = [
-                   "//button[contains(., 'Verify')]",
-                   "//button[contains(., 'Continue')]",
-                   "//button[contains(., '继续')]",
-                   "//button[@type='submit']"
-                ]
+                verify_selectors = _as_list(selectors.get("verify_xpaths"))
 
                 print("Looking for Verify/Continue...")
                 for xpath in verify_selectors:
@@ -856,7 +861,7 @@ def run(fixed_account=None):
         print("Generated password: [redacted]")
 
         try:
-            password_inputs = driver.find_elements(By.CSS_SELECTOR, 'input[type="password"]')
+            password_inputs = driver.find_elements(By.CSS_SELECTOR, selectors.get("password_input_css"))
 
             if len(password_inputs) >= 1:
                 print(f"Found {len(password_inputs)} password field(s)")
@@ -873,12 +878,7 @@ def run(fixed_account=None):
                     print("Confirm password filled")
                 else:
                      try:
-                        confirm_selectors = [
-                            'input[name="confirmPassword"]',
-                            'input[placeholder="Confirm password"]',
-                            'input[placeholder="Re-enter password"]',
-                            'input[id*="confirm"]'
-                        ]
+                        confirm_selectors = _as_list(selectors.get("confirm_password_css"))
                         for sel in confirm_selectors:
                             try:
                                 confirm_input = driver.find_element(By.CSS_SELECTOR, sel)
@@ -896,11 +896,7 @@ def run(fixed_account=None):
                 human_delay(1, 2)
                 print("Clicking submit / create...")
 
-                submit_selectors = [
-                    "//button[contains(., 'Create AWS Builder ID')]",
-                    "//button[contains(., 'Continue')]",
-                    "//button[@type='submit']"
-                ]
+                submit_selectors = _as_list(selectors.get("submit_xpaths"))
 
                 for xpath in submit_selectors:
                     try:
@@ -922,9 +918,9 @@ def run(fixed_account=None):
         print(f"Final URL: {driver.current_url}")
         driver.save_screenshot("final_success.png")
 
-        if registration_looks_successful(driver):
-            save_account(email_address, password, random_name, jwt_token, status="registered")
-            print("\n✅ Run finished; registered row appended to accounts.jsonl")
+        if registration_looks_successful(driver, success_markers, blocking_markers):
+            save_account(email_address, password, random_name, jwt_token, status="registered", output_file=output_file)
+            print(f"\n✅ Run finished; registered row appended to {output_file}")
         elif password_submitted and verification_code:
             save_account(
                 email_address,
@@ -933,8 +929,9 @@ def run(fixed_account=None):
                 jwt_token,
                 status="submitted_unconfirmed",
                 notes="Password form was submitted, but no definitive success page was detected.",
+                output_file=output_file,
             )
-            print("\n⚠️ Run finished; submitted_unconfirmed row appended to accounts.jsonl")
+            print(f"\n⚠️ Run finished; submitted_unconfirmed row appended to {output_file}")
         else:
             print("\n❌ Run finished without confirmed registration; no account row saved")
 
@@ -950,6 +947,7 @@ def run(fixed_account=None):
                     jwt_token if 'jwt_token' in locals() else "",
                     status="partial_error",
                     notes=str(e),
+                    output_file=output_file if 'output_file' in locals() else "accounts.jsonl",
                 )
                 print("⚠️  Partial error row saved")
         except: pass
@@ -984,7 +982,10 @@ class AwsBuilderTarget:
     description = "AWS Builder ID signup flow"
 
     def run(self, context: RunContext):
-        return run(fixed_account=context.fixed_account)
+        return run(
+            fixed_account=context.fixed_account,
+            target_config_path=context.options.get("target_config"),
+        )
 
 
 TARGET = AwsBuilderTarget()
