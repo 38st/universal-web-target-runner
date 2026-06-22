@@ -1,6 +1,6 @@
 # Universal Web Target Runner 使用说明
 
-本文档介绍如何配置和使用通用目标自动化运行器。项目通过 `--target` 选择具体流程，`aws_builder` 是默认内置目标，`generic_signup` 可通过 YAML 配置授权表单流程。
+本文档介绍如何配置和使用通用目标自动化运行器。项目通过 `--target` 选择具体流程，`web_signup` 是默认内置目标，`generic_signup` 可通过 YAML 配置授权表单流程。
 
 ## 前置要求
 
@@ -14,7 +14,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/aws-builder-id.git universal-web-target-runner
+git clone https://github.com/38st/universal-web-target-runner.git
 cd universal-web-target-runner
 ```
 
@@ -42,7 +42,10 @@ pip install -r requirements.txt
 python src/runners/main.py --list-targets
 
 # 默认目标
-python src/runners/main.py --target aws_builder
+python src/runners/main.py --target web_signup
+
+# 使用 AWS Builder ID 示例配置
+python src/runners/main.py --target web_signup --target-config config/targets/aws_builder_id.yaml
 
 # 通用 YAML 配置目标
 python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
@@ -52,8 +55,10 @@ python src/runners/main.py --target generic_signup --target-config config/target
 
 | Target | 说明 |
 |--------|------|
-| `aws_builder` | AWS Builder ID 注册流程 |
+| `web_signup` | 可配置的浏览器注册流程，默认使用 AWS Builder ID 示例配置 |
 | `generic_signup` | YAML 配置驱动的授权表单流程 |
+
+旧的 `aws_builder` target 名称仍可作为兼容别名使用，但新配置和文档默认使用 `web_signup`。
 
 ### 邮箱服务配置
 
@@ -155,10 +160,10 @@ run.bat
 python src/runners/main.py
 
 # 指定目标
-python src/runners/main.py --target aws_builder
+python src/runners/main.py --target web_signup
 
 # 批量运行
-python src/runners/batch_run.py --target aws_builder
+python src/runners/batch_run.py --target web_signup
 
 # 智能运行（自动检测地区）
 python src/runners/smart_run.py
@@ -178,7 +183,7 @@ python src/runners/smart_run.py
 
 ## 输出
 
-目标结果默认保存在目标配置指定的 JSONL 文件中。`aws_builder` 默认写入 `accounts.jsonl`，每行一个 JSON：
+目标结果默认保存在目标配置指定的 JSONL 文件中。`web_signup` 示例配置默认写入 `accounts.jsonl`，每行一个 JSON：
 
 ```json
 {

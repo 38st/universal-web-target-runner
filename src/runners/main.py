@@ -2,8 +2,8 @@
 """
 Universal Web Target Runner entry point.
 
-Site-specific behavior lives in target adapters. `aws_builder` is the default
-built-in target for backward compatibility.
+Site-specific behavior lives in target adapters. `web_signup` is the default
+built-in target, and legacy `aws_builder` names are accepted as aliases.
 """
 
 import argparse
@@ -18,7 +18,7 @@ from core.context import RunContext
 from targets.registry import get_target, list_targets
 
 
-DEFAULT_TARGET = "aws_builder"
+DEFAULT_TARGET = "web_signup"
 
 
 def _normalize_target_name(target_name: str | None) -> str:

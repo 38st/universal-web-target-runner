@@ -2,7 +2,7 @@
 batch_run: sequential multi-run loop for a configured target.
 
 Usage:
-    python -m runners.batch_run --target aws_builder --count 10
+    python -m runners.batch_run --target web_signup --count 10
 """
 
 import sys
@@ -21,7 +21,7 @@ from datetime import datetime
 
 def batch_run(count: int = 5,
               stagger: int = 25,
-              target_name: str = "aws_builder",
+              target_name: str = "web_signup",
               target_config: str | None = None,
               proxy_ok: bool = False,
               proxy_url: str | None = None):
@@ -128,8 +128,8 @@ def _write_batch_report(results: list):
 
 def main():
     parser = argparse.ArgumentParser(description="Batch target runner")
-    parser.add_argument("--target", default="aws_builder",
-                        help="Target adapter to run (default: aws_builder)")
+    parser.add_argument("--target", default="web_signup",
+                        help="Target adapter to run (default: web_signup)")
     parser.add_argument("--target-config",
                         help="Path to a target-specific YAML config")
     parser.add_argument("--count", type=int, default=5,

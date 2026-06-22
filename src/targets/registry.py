@@ -4,9 +4,15 @@ from targets.base import TargetAdapter
 
 
 _TARGET_MODULES = {
-    "aws_builder": "targets.aws_builder",
+    "web_signup": "targets.web_signup",
     "generic_signup": "targets.generic_signup",
 }
+
+_TARGET_ALIASES = {
+    "aws_builder": "web_signup",
+}
+
+DEFAULT_TARGET = "web_signup"
 
 
 def list_targets() -> list[str]:
@@ -18,7 +24,8 @@ def list_targets() -> list[str]:
 def get_target(name: str) -> TargetAdapter:
     """Load a target adapter by name."""
 
-    target_name = (name or "aws_builder").strip().lower().replace("-", "_")
+    target_name = (name or DEFAULT_TARGET).strip().lower().replace("-", "_")
+    target_name = _TARGET_ALIASES.get(target_name, target_name)
     module_path = _TARGET_MODULES.get(target_name)
     if not module_path:
         available = ", ".join(list_targets())

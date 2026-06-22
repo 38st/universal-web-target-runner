@@ -30,7 +30,9 @@ from helpers.multilang import lang_selector
 
 
 fake = Faker('en_US')
-DEFAULT_TARGET_CONFIG_PATH = "config/targets/aws_builder.yaml"
+DEFAULT_TARGET_CONFIG_PATH = "config/targets/aws_builder_id.yaml"
+TARGET_CONFIG_ENV = "WEB_SIGNUP_CONFIG"
+LEGACY_TARGET_CONFIG_ENV = "AWS_BUILDER_CONFIG"
 REQUIRED_SELECTOR_KEYS = (
     "email_input_css",
     "primary_button_css",
@@ -48,19 +50,24 @@ def _as_list(value):
     return [value]
 
 
-def load_aws_builder_config(config_path=None):
-    """Load AWS Builder target behavior from YAML."""
+def load_web_signup_config(config_path=None):
+    """Load web signup target behavior from YAML."""
 
-    selected_path = config_path or os.environ.get("AWS_BUILDER_CONFIG") or DEFAULT_TARGET_CONFIG_PATH
+    selected_path = (
+        config_path
+        or os.environ.get(TARGET_CONFIG_ENV)
+        or os.environ.get(LEGACY_TARGET_CONFIG_ENV)
+        or DEFAULT_TARGET_CONFIG_PATH
+    )
     path = resolve_project_path(selected_path)
     if not path.exists():
-        raise FileNotFoundError(f"AWS Builder target config not found: {path}")
+        raise FileNotFoundError(f"Web signup target config not found: {path}")
     target_config = load_yaml_file(path)
-    _validate_aws_builder_config(target_config, path)
+    _validate_web_signup_config(target_config, path)
     return target_config
 
 
-def _validate_aws_builder_config(target_config, path):
+def _validate_web_signup_config(target_config, path):
     selectors = _selectors(target_config)
     missing = []
     if not target_config.get("start_url"):
@@ -68,7 +75,7 @@ def _validate_aws_builder_config(target_config, path):
     missing.extend(f"selectors.{key}" for key in REQUIRED_SELECTOR_KEYS if not selectors.get(key))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(f"AWS Builder target config {path} is missing: {missing_text}")
+        raise ValueError(f"Web signup target config {path} is missing: {missing_text}")
 
 
 def _selectors(target_config):
@@ -705,7 +712,7 @@ def detect_result(
 
 
 def run(fixed_account=None, target_config_path=None):
-    target_config = load_aws_builder_config(target_config_path)
+    target_config = load_web_signup_config(target_config_path)
     selectors = _selectors(target_config)
     email_filters = target_config.get("email") or {}
     output_file = target_config.get("output_file", "accounts.jsonl")
@@ -746,7 +753,7 @@ def run(fixed_account=None, target_config_path=None):
     verification_code = None
     password_submitted = False
 
-    profile_prefix = target_config.get("profile_prefix", "aws_reg_")
+    profile_prefix = target_config.get("profile_prefix", "web_signup_")
     session = None
 
     print("\nLaunching browser...")
@@ -817,9 +824,9 @@ def run(fixed_account=None, target_config_path=None):
         except: pass
 
 
-class AwsBuilderTarget:
-    name = "aws_builder"
-    description = "AWS Builder ID signup flow"
+class WebSignupTarget:
+    name = "web_signup"
+    description = "Configurable web signup flow"
 
     def run(self, context: RunContext):
         return run(
@@ -828,7 +835,7 @@ class AwsBuilderTarget:
         )
 
 
-TARGET = AwsBuilderTarget()
+TARGET = WebSignupTarget()
 
 
 if __name__ == "__main__":

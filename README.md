@@ -5,7 +5,7 @@
 [![Selenium](https://img.shields.io/badge/Selenium-4.0+-orange.svg)](https://www.selenium.dev/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
 
-面向授权 Web 流程的目标化自动化运行器。项目通过 target adapter 扩展不同站点或表单流程，内置 `aws_builder` 示例目标，并提供多地区环境模拟、浏览器指纹配置、邮箱验证码和代理集成。
+面向授权 Web 流程的目标化自动化运行器。项目通过 target adapter 扩展不同站点或表单流程，内置 `web_signup` 目标，并提供 AWS Builder ID 示例配置、多地区环境模拟、浏览器指纹配置、邮箱验证码和代理集成。
 
 ## 赞助商
 
@@ -21,8 +21,10 @@
 
 | Target | 说明 |
 |--------|------|
-| `aws_builder` | AWS Builder ID 注册流程，作为默认内置目标保留 |
+| `web_signup` | 可配置的浏览器注册流程，默认使用 AWS Builder ID 示例配置 |
 | `generic_signup` | 通过 YAML 配置步骤的通用表单/注册流程，要求配置 `authorized: true` |
+
+旧的 `aws_builder` target 名称仍可作为兼容别名使用，但新配置和文档默认使用 `web_signup`。
 
 本项目的核心目标不是绑定某一个服务，而是把浏览器、邮箱、代理、地区配置和结果保存抽象成可复用运行器。请只用于你拥有、测试或明确获得授权的 Web 流程。
 
@@ -30,7 +32,7 @@
 
 | 功能 | 说明 |
 |-----|------|
-| Target 架构 | 使用 `--target` 选择目标适配器，AWS 只是一个内置目标 |
+| Target 架构 | 使用 `--target` 选择目标适配器，站点行为由目标配置提供 |
 | 多地区支持 | 美国、德国、日本三个地区的语言和时区环境 |
 | 设备模拟 | 桌面浏览器和移动设备 User-Agent 切换 |
 | 指纹随机化 | CPU 核心数、内存、WebGL 等硬件指纹伪装 |
@@ -59,7 +61,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/7836246/aws-builder-id.git universal-web-target-runner
+git clone https://github.com/38st/universal-web-target-runner.git
 cd universal-web-target-runner
 ```
 
@@ -112,11 +114,14 @@ run.bat
 # 查看可用目标
 python src/runners/main.py --list-targets
 
-# 默认运行 aws_builder
+# 默认运行 web_signup
 python src/runners/main.py
 
 # 明确指定目标
-python src/runners/main.py --target aws_builder
+python src/runners/main.py --target web_signup
+
+# 使用 AWS Builder ID 示例配置
+python src/runners/main.py --target web_signup --target-config config/targets/aws_builder_id.yaml
 
 # 运行通用配置目标
 python src/runners/main.py --target generic_signup --target-config config/targets/generic_signup.example.yaml
@@ -124,7 +129,7 @@ python src/runners/main.py --target generic_signup --target-config config/target
 
 ### 6. 查看结果
 
-目标运行结果默认保存在对应目标配置指定的 JSONL 文件中。`aws_builder` 默认写入 `accounts.jsonl`：
+目标运行结果默认保存在对应目标配置指定的 JSONL 文件中。`web_signup` 示例配置默认写入 `accounts.jsonl`：
 
 ```json
 {

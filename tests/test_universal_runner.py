@@ -5,14 +5,18 @@ from pathlib import Path
 from core.storage import append_jsonl, read_jsonl
 from runners.main import _normalize_target_name
 from services.email_service import message_matches_filters
-from targets.aws_builder import _markers, _selectors, load_aws_builder_config
+from targets.web_signup import _markers, _selectors, load_web_signup_config
 from targets.generic_signup import _render_value
 from targets.registry import get_target, list_targets
 
 
 class UniversalRunnerTests(unittest.TestCase):
-    def test_registry_lists_aws_builder_target(self):
-        self.assertIn("aws_builder", list_targets())
+    def test_registry_lists_web_signup_target(self):
+        self.assertIn("web_signup", list_targets())
+
+    def test_registry_accepts_legacy_aws_builder_alias(self):
+        self.assertEqual(get_target("aws_builder").name, "web_signup")
+        self.assertEqual(get_target("aws-builder").name, "web_signup")
 
     def test_registry_lists_generic_signup_target(self):
         self.assertIn("generic_signup", list_targets())
@@ -22,7 +26,7 @@ class UniversalRunnerTests(unittest.TestCase):
             get_target("missing-target")
 
     def test_target_name_normalization(self):
-        self.assertEqual(_normalize_target_name("aws-builder"), "aws_builder")
+        self.assertEqual(_normalize_target_name("web-signup"), "web_signup")
 
     def test_jsonl_storage_round_trip(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -39,8 +43,8 @@ class UniversalRunnerTests(unittest.TestCase):
 
         self.assertEqual(rendered, "hello Example User <user@example.test>")
 
-    def test_aws_builder_config_loads_selectors_and_markers(self):
-        target_config = load_aws_builder_config()
+    def test_web_signup_config_loads_selectors_and_markers(self):
+        target_config = load_web_signup_config()
 
         self.assertEqual(target_config["start_url"], "https://builder.aws.com/start")
         self.assertIn("email_input_css", _selectors(target_config))

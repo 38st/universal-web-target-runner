@@ -1,6 +1,6 @@
-name: aws_builder
+name: aws_builder_id
 start_url: "https://builder.aws.com/start"
-profile_prefix: "aws_reg_"
+profile_prefix: "web_signup_"
 output_file: "accounts.jsonl"
 
 email:
