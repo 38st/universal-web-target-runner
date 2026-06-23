@@ -10,7 +10,6 @@ from runners.main import _normalize_target_name
 from services.email_service import message_matches_filters
 from targets.web_signup import (
     _markers,
-    _selectors,
     execute_web_signup_steps,
     load_web_signup_config,
 )
@@ -51,10 +50,9 @@ class UniversalRunnerTests(unittest.TestCase):
 
         self.assertEqual(rendered, "hello Example User <user@example.test>")
 
-    def test_web_signup_config_loads_selectors_and_markers(self):
+    def test_web_signup_config_loads_step_fields_and_markers(self):
         target_config = load_web_signup_config()
 
-        self.assertEqual(target_config["start_url"], "https://builder.aws.com/start")
         self.assertEqual(
             [step["action"] for step in target_config["steps"]],
             [
@@ -68,7 +66,16 @@ class UniversalRunnerTests(unittest.TestCase):
                 "detect_result",
             ],
         )
-        self.assertIn("email_input_css", _selectors(target_config))
+        self.assertNotIn("selectors", target_config)
+        self.assertEqual(target_config["steps"][0]["url"], "https://builder.aws.com/start")
+        self.assertEqual(
+            target_config["steps"][3]["input_css"],
+            'input[placeholder="username@example.com"]',
+        )
+        self.assertEqual(
+            target_config["steps"][3]["submit_css"],
+            '[data-testid="test-primary-button"]',
+        )
         self.assertIn("account created", _markers(target_config, "success"))
 
     def test_web_signup_config_validates_only_selected_steps(self):
@@ -89,24 +96,43 @@ class UniversalRunnerTests(unittest.TestCase):
 
         self.assertEqual(target_config["steps"][0]["action"], "open_start_page")
 
+    def test_web_signup_config_accepts_legacy_selector_fallbacks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "legacy_web_signup.yaml"
+            path.write_text(
+                "\n".join([
+                    "name: legacy_web_signup",
+                    "steps:",
+                    "  - action: submit_email",
+                    "selectors:",
+                    "  email_input_css: input[type=email]",
+                    "  primary_button_css: button[type=submit]",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+
+            target_config = load_web_signup_config(path)
+
+        self.assertEqual(target_config["steps"][0]["action"], "submit_email")
+
     def test_web_signup_steps_execute_from_config_order(self):
         target_config = {
-            "start_url": "https://example.test",
-            "selectors": {
-                "email_input_css": "input[type=email]",
-                "primary_button_css": "button",
-                "name_input_css": "input[name=name]",
-                "otp_input_css": "input[name=otp]",
-                "password_input_css": "input[type=password]",
-            },
             "steps": [
-                {"action": "open_start_page"},
-                {"action": "dismiss_cookies"},
-                {"action": "enter_signup_flow"},
-                {"action": "submit_email"},
-                {"action": "submit_name"},
-                {"action": "fetch_and_submit_otp"},
-                {"action": "set_password"},
+                {"action": "open_start_page", "url": "https://example.test"},
+                {"action": "dismiss_cookies", "accept_xpaths": ["//button"]},
+                {"action": "enter_signup_flow", "texts": ["Sign up"]},
+                {
+                    "action": "submit_email",
+                    "input_css": "input[type=email]",
+                    "submit_css": "button",
+                },
+                {"action": "submit_name", "input_css": "input[name=name]"},
+                {
+                    "action": "fetch_and_submit_otp",
+                    "input_css": "input[name=otp]",
+                },
+                {"action": "set_password", "input_css": "input[type=password]"},
                 {"action": "detect_result"},
             ],
         }

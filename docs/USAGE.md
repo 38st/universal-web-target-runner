@@ -86,21 +86,36 @@ python src/runners/batch_run.py --target web_signup --count 5
 
 ## Web Signup Steps
 
-The `web_signup` target reads its workflow order from the selected target config:
+The `web_signup` target reads its workflow order from the selected target config. Selectors and step-specific parameters live on the step that uses them:
 
 ```yaml
 steps:
   - action: open_start_page
+    url: "https://example.test/signup"
   - action: dismiss_cookies
+    accept_xpaths:
+      - "//button[contains(., 'Accept')]"
   - action: enter_signup_flow
+    texts:
+      - "Sign up"
   - action: submit_email
+    input_css: 'input[type="email"]'
+    submit_css: 'button[type="submit"]'
   - action: submit_name
+    input_css: 'input[name="name"]'
+    continue_css: 'button[type="submit"]'
   - action: fetch_and_submit_otp
+    input_css: 'input[name="code"]'
+    verify_xpaths:
+      - "//button[contains(., 'Verify')]"
   - action: set_password
+    input_css: 'input[type="password"]'
+    submit_xpaths:
+      - "//button[@type='submit']"
   - action: detect_result
 ```
 
-Each step is optional from the runner's perspective, but steps that are present must have the selectors they need. For example, `submit_email` requires `selectors.email_input_css` and `selectors.primary_button_css`; `set_password` requires `selectors.password_input_css`.
+Each step is optional from the runner's perspective, but steps that are present must have the fields they need. For example, `submit_email` requires `input_css` and `submit_css`; `set_password` requires `input_css`.
 
 ## Email Service
 

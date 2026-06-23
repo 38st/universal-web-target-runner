@@ -85,17 +85,23 @@ The `web_signup` target also supports:
 - `WEB_SIGNUP_CONFIG`: preferred env var for its config path
 - `AWS_BUILDER_CONFIG`: legacy fallback env var
 
-`web_signup` runs the semantic workflow listed in the target config `steps:` block. The included example uses:
+`web_signup` runs the semantic workflow listed in the target config `steps:` block. Selectors and parameters live on the step that uses them:
 
 ```yaml
 steps:
   - action: open_start_page
+    url: "https://example.test/signup"
   - action: dismiss_cookies
   - action: enter_signup_flow
   - action: submit_email
+    input_css: 'input[type="email"]'
+    submit_css: 'button[type="submit"]'
   - action: submit_name
+    input_css: 'input[name="name"]'
   - action: fetch_and_submit_otp
+    input_css: 'input[name="code"]'
   - action: set_password
+    input_css: 'input[type="password"]'
   - action: detect_result
 ```
 

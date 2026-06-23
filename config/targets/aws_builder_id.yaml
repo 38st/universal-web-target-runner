@@ -1,16 +1,76 @@
 name: aws_builder_id
-start_url: "https://builder.aws.com/start"
 profile_prefix: "web_signup_"
 output_file: "accounts.jsonl"
 
 steps:
   - action: open_start_page
+    url: "https://builder.aws.com/start"
+
   - action: dismiss_cookies
+    accept_xpaths:
+      - "//button[text()='Accept']"
+      - "//button[contains(text(), 'Accept')]"
+      - "//button[@id='awsccc-cb-btn-accept']"
+      - "//button[contains(@class, 'awsccc')]"
+      - "//div[@id='awsccc-cs-modalcontent']//button[1]"
+      - "//button[contains(@class, 'primary')]"
+
   - action: enter_signup_flow
+    texts:
+      - "Sign up with Builder ID"
+      - "Mit Builder-ID anmelden"
+      - "Builder ID"
+      - "Builder-ID"
+    fallback_css:
+      - "a[href*='signup']"
+      - "a[href*='register']"
+      - ".lb-btn-primary"
+      - "button[type='submit']"
+    required_text: "Builder ID"
+
   - action: submit_email
+    input_css: 'input[placeholder="username@example.com"]'
+    submit_css: '[data-testid="test-primary-button"]'
+
   - action: submit_name
+    input_css: 'input[type="text"]'
+    continue_css: '[data-testid="test-primary-button"]'
+    continue_xpaths:
+      - "//button[contains(., 'Continue')]"
+      - "//button[@type='submit']"
+    error_xpaths:
+      - "//*[contains(text(), 'error processing')]"
+      - "//*[contains(text(), 'Error')]"
+      - "//*[contains(text(), 'try again')]"
+      - "//*[contains(text(), 'Sorry')]"
+      - "//*[contains(@class, 'error')]"
+      - "//*[contains(@class, 'alert')]"
+      - "//div[contains(@role, 'alert')]"
+    close_error_xpaths:
+      - "//button[contains(@aria-label, 'close')]"
+      - "//button[contains(@class, 'close')]"
+      - "//button[text()='×']"
+      - "//button[text()='OK']"
+
   - action: fetch_and_submit_otp
+    input_css: 'input[placeholder*="digit"], input[type="text"]'
+    verify_xpaths:
+      - "//button[contains(., 'Verify')]"
+      - "//button[contains(., 'Continue')]"
+      - "//button[@type='submit']"
+
   - action: set_password
+    input_css: 'input[type="password"]'
+    confirm_css:
+      - 'input[name="confirmPassword"]'
+      - 'input[placeholder="Confirm password"]'
+      - 'input[placeholder="Re-enter password"]'
+      - 'input[id*="confirm"]'
+    submit_xpaths:
+      - "//button[contains(., 'Create AWS Builder ID')]"
+      - "//button[contains(., 'Continue')]"
+      - "//button[@type='submit']"
+
   - action: detect_result
 
 email:
@@ -24,68 +84,6 @@ email:
     - "amazon"
     - "aws"
     - "verify"
-
-selectors:
-  cookie_accept_xpaths:
-    - "//button[text()='Accept']"
-    - "//button[contains(text(), 'Accept')]"
-    - "//button[@id='awsccc-cb-btn-accept']"
-    - "//button[contains(@class, 'awsccc')]"
-    - "//div[@id='awsccc-cs-modalcontent']//button[1]"
-    - "//button[contains(@class, 'primary')]"
-
-  signup_texts:
-    - "Sign up with Builder ID"
-    - "Mit Builder-ID anmelden"
-    - "Builder ID"
-    - "Builder-ID"
-  signup_fallback_css:
-    - "a[href*='signup']"
-    - "a[href*='register']"
-    - ".lb-btn-primary"
-    - "button[type='submit']"
-  signup_required_text: "Builder ID"
-
-  email_input_css: 'input[placeholder="username@example.com"]'
-  primary_button_css: '[data-testid="test-primary-button"]'
-  name_input_css: 'input[type="text"]'
-
-  continue_xpaths:
-    - "//button[contains(., 'Continue')]"
-    - "//button[@type='submit']"
-
-  page_error_xpaths:
-    - "//*[contains(text(), 'error processing')]"
-    - "//*[contains(text(), 'Error')]"
-    - "//*[contains(text(), 'try again')]"
-    - "//*[contains(text(), 'Sorry')]"
-    - "//*[contains(@class, 'error')]"
-    - "//*[contains(@class, 'alert')]"
-    - "//div[contains(@role, 'alert')]"
-
-  close_error_xpaths:
-    - "//button[contains(@aria-label, 'close')]"
-    - "//button[contains(@class, 'close')]"
-    - "//button[text()='×']"
-    - "//button[text()='OK']"
-
-  otp_input_css: 'input[placeholder*="digit"], input[type="text"]'
-  verify_xpaths:
-    - "//button[contains(., 'Verify')]"
-    - "//button[contains(., 'Continue')]"
-    - "//button[@type='submit']"
-
-  password_input_css: 'input[type="password"]'
-  confirm_password_css:
-    - 'input[name="confirmPassword"]'
-    - 'input[placeholder="Confirm password"]'
-    - 'input[placeholder="Re-enter password"]'
-    - 'input[id*="confirm"]'
-
-  submit_xpaths:
-    - "//button[contains(., 'Create AWS Builder ID')]"
-    - "//button[contains(., 'Continue')]"
-    - "//button[@type='submit']"
 
 markers:
   blocking_errors:

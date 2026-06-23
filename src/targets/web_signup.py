@@ -44,11 +44,41 @@ SUPPORTED_STEP_ACTIONS = {
     "set_password",
     "detect_result",
 }
-STEP_SELECTOR_REQUIREMENTS = {
-    "submit_email": ("email_input_css", "primary_button_css"),
-    "submit_name": ("name_input_css",),
-    "fetch_and_submit_otp": ("otp_input_css",),
-    "set_password": ("password_input_css",),
+STEP_FIELD_REQUIREMENTS = {
+    "submit_email": ("input_css", "submit_css"),
+    "submit_name": ("input_css",),
+    "fetch_and_submit_otp": ("input_css",),
+    "set_password": ("input_css",),
+}
+LEGACY_STEP_FIELD_MAP = {
+    "dismiss_cookies": {
+        "accept_xpaths": "cookie_accept_xpaths",
+    },
+    "enter_signup_flow": {
+        "texts": "signup_texts",
+        "fallback_css": "signup_fallback_css",
+        "required_text": "signup_required_text",
+    },
+    "submit_email": {
+        "input_css": "email_input_css",
+        "submit_css": "primary_button_css",
+    },
+    "submit_name": {
+        "input_css": "name_input_css",
+        "continue_css": "primary_button_css",
+        "continue_xpaths": "continue_xpaths",
+        "error_xpaths": "page_error_xpaths",
+        "close_error_xpaths": "close_error_xpaths",
+    },
+    "fetch_and_submit_otp": {
+        "input_css": "otp_input_css",
+        "verify_xpaths": "verify_xpaths",
+    },
+    "set_password": {
+        "input_css": "password_input_css",
+        "confirm_css": "confirm_password_css",
+        "submit_xpaths": "submit_xpaths",
+    },
 }
 
 
@@ -78,14 +108,13 @@ def load_web_signup_config(config_path=None):
 
 
 def _validate_web_signup_config(target_config, path):
-    selectors = _selectors(target_config)
     steps = _steps(target_config)
     missing = []
     if not isinstance(steps, list) or not steps:
         missing.append("steps")
     else:
         for index, raw_step in enumerate(steps, start=1):
-            step = _normalize_step(raw_step, index)
+            step = _step_config(target_config, _normalize_step(raw_step, index))
             if not _step_enabled(step):
                 continue
 
@@ -100,9 +129,9 @@ def _validate_web_signup_config(target_config, path):
                 missing.append(f"start_url or steps[{index}].url")
 
             missing.extend(
-                f"selectors.{key} for step {index} ({action})"
-                for key in STEP_SELECTOR_REQUIREMENTS.get(action, ())
-                if not selectors.get(key)
+                f"steps[{index}].{key} for {action}"
+                for key in STEP_FIELD_REQUIREMENTS.get(action, ())
+                if not step.get(key)
             )
 
     if missing:
@@ -140,6 +169,20 @@ def _normalize_step(raw_step: Any, index: int) -> dict[str, Any]:
 
 def _step_enabled(step):
     return step.get("enabled", True) is not False
+
+
+def _step_config(target_config, step):
+    """Return step config with legacy top-level selectors as fallback values."""
+
+    merged = dict(step)
+    legacy_selectors = _selectors(target_config)
+    field_map = LEGACY_STEP_FIELD_MAP.get(merged.get("action"), {})
+
+    for step_key, legacy_key in field_map.items():
+        if merged.get(step_key) is None and legacy_key in legacy_selectors:
+            merged[step_key] = legacy_selectors[legacy_key]
+
+    return merged
 
 
 def generate_strong_password():
@@ -224,7 +267,7 @@ def open_start_page(driver, target_config, step=None):
     print(f"Page title: {driver.title}")
 
 
-def dismiss_cookies(driver, selectors):
+def dismiss_cookies(driver, step):
     """Best-effort cookie banner dismissal."""
 
     print("Checking cookie banner...")
@@ -233,7 +276,7 @@ def dismiss_cookies(driver, selectors):
     cookie_closed = False
 
     try:
-        accept_selectors = _as_list(selectors.get("cookie_accept_xpaths"))
+        accept_selectors = _as_list(step.get("accept_xpaths"))
 
         for selector in accept_selectors:
             try:
@@ -270,7 +313,7 @@ def dismiss_cookies(driver, selectors):
     return cookie_closed
 
 
-def enter_signup_flow(driver, selectors):
+def enter_signup_flow(driver, step):
     """Navigate from the start page into the signup flow."""
 
     print("Clicking signup entrypoint...")
@@ -279,17 +322,19 @@ def enter_signup_flow(driver, selectors):
     signup_clicked = False
     original_url = driver.current_url
 
-    for scan_attempt in range(3):
+    max_scan_attempts = int(step.get("scan_attempts", 3))
+
+    for scan_attempt in range(max_scan_attempts):
         if signup_clicked:
             break
 
         if scan_attempt > 0:
-            print(f"   🔄 Rescan ({scan_attempt + 1}/3)...")
+            print(f"   🔄 Rescan ({scan_attempt + 1}/{max_scan_attempts})...")
             human_delay(3, 5)
 
         try:
             print("   🔍 Scanning DOM...")
-            key_texts = _as_list(selectors.get("signup_texts"))
+            key_texts = _as_list(step.get("texts"))
 
             found_elements = []
             for text in key_texts:
@@ -369,8 +414,8 @@ def enter_signup_flow(driver, selectors):
     if not signup_clicked:
         print("⚠️  Heuristic scan failed; trying CSS fallbacks...")
         try:
-            css_selectors = _as_list(selectors.get("signup_fallback_css"))
-            required_text = selectors.get("signup_required_text", "")
+            css_selectors = _as_list(step.get("fallback_css"))
+            required_text = step.get("required_text", "")
             for css in css_selectors:
                 try:
                     els = driver.find_elements(By.CSS_SELECTOR, css)
@@ -398,19 +443,19 @@ def enter_signup_flow(driver, selectors):
     return signup_clicked
 
 
-def submit_email(driver, wait, selectors, email_address):
+def submit_email(driver, wait, step, email_address):
     """Submit the email address on the first signup form."""
 
     print(f"Typing email: {email_address}")
 
-    safe_input(wait, (By.CSS_SELECTOR, selectors.get("email_input_css")), email_address)
+    safe_input(wait, (By.CSS_SELECTOR, step.get("input_css")), email_address)
     driver.save_screenshot("screenshot.png")
     print("Email entered")
 
     human_delay(1, 2)
     print("Clicking Continue...")
     continue_btn = wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, selectors.get("primary_button_css")))
+        EC.element_to_be_clickable((By.CSS_SELECTOR, step.get("submit_css")))
     )
     continue_btn.click()
 
@@ -419,7 +464,7 @@ def submit_email(driver, wait, selectors, email_address):
     driver.save_screenshot("screenshot.png")
 
 
-def submit_name(driver, wait, selectors, name=None):
+def submit_name(driver, wait, step, name=None):
     """Submit a generated display name and wait for the OTP step."""
 
     random_name = name or fake.name()
@@ -432,7 +477,7 @@ def submit_name(driver, wait, selectors, name=None):
     for name_attempt in range(3):
         try:
             name_input = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, selectors.get("name_input_css")))
+                EC.presence_of_element_located((By.CSS_SELECTOR, step.get("input_css")))
             )
 
             name_input.click()
@@ -463,7 +508,7 @@ def submit_name(driver, wait, selectors, name=None):
     driver.save_screenshot("screenshot.png")
     print("Name step done")
 
-    max_continue_attempts = 5
+    max_continue_attempts = int(step.get("max_continue_attempts", 5))
     page_changed = False
     original_url = driver.current_url
 
@@ -473,15 +518,15 @@ def submit_name(driver, wait, selectors, name=None):
 
         try:
             continue_btn = None
-            continue_selectors = [
-                lang_selector.get_by_xpath('continue', 'button'),
-            ]
+            continue_selectors = []
+            if step.get("include_localized_continue", True):
+                continue_selectors.append(lang_selector.get_by_xpath('continue', 'button'))
             continue_selectors.extend(
-                (By.XPATH, xpath) for xpath in _as_list(selectors.get("continue_xpaths"))
+                (By.XPATH, xpath) for xpath in _as_list(step.get("continue_xpaths"))
             )
-            primary_button_css = selectors.get("primary_button_css")
-            if primary_button_css:
-                continue_selectors.append((By.CSS_SELECTOR, primary_button_css))
+            continue_selectors.extend(
+                (By.CSS_SELECTOR, css) for css in _as_list(step.get("continue_css"))
+            )
 
             for selector in continue_selectors:
                 try:
@@ -517,7 +562,7 @@ def submit_name(driver, wait, selectors, name=None):
 
         error_found = False
         try:
-            error_selectors = _as_list(selectors.get("page_error_xpaths"))
+            error_selectors = _as_list(step.get("error_xpaths"))
 
             for error_xpath in error_selectors:
                 try:
@@ -537,7 +582,7 @@ def submit_name(driver, wait, selectors, name=None):
 
             if error_found:
                 try:
-                    close_selectors = _as_list(selectors.get("close_error_xpaths"))
+                    close_selectors = _as_list(step.get("close_error_xpaths"))
                     for close_xpath in close_selectors:
                         try:
                             close_btn = driver.find_element(By.XPATH, close_xpath)
@@ -576,7 +621,7 @@ def submit_name(driver, wait, selectors, name=None):
     return random_name
 
 
-def fetch_and_submit_otp(driver, wait, selectors, *, fixed_account, email_filters, jwt_token):
+def fetch_and_submit_otp(driver, wait, step, *, fixed_account, email_filters, jwt_token):
     """Fetch a verification code and submit it when available."""
 
     from services.outlook_service import get_verification_code_from_outlook
@@ -605,7 +650,7 @@ def fetch_and_submit_otp(driver, wait, selectors, *, fixed_account, email_filter
             human_delay(4, 6)
 
             code_input = wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, selectors.get("otp_input_css")))
+                EC.element_to_be_clickable((By.CSS_SELECTOR, step.get("input_css")))
             )
 
             human_delay(1, 2)
@@ -618,7 +663,7 @@ def fetch_and_submit_otp(driver, wait, selectors, *, fixed_account, email_filter
             human_delay(1.5, 2.5)
 
             verify_clicked = False
-            verify_selectors = _as_list(selectors.get("verify_xpaths"))
+            verify_selectors = _as_list(step.get("verify_xpaths"))
 
             print("Looking for Verify/Continue...")
             for xpath in verify_selectors:
@@ -649,7 +694,7 @@ def fetch_and_submit_otp(driver, wait, selectors, *, fixed_account, email_filter
     return verification_code
 
 
-def set_password(driver, selectors, password=None):
+def set_password(driver, step, password=None):
     """Generate and submit a password when the password step is present."""
 
     print("Preparing password step...")
@@ -662,7 +707,7 @@ def set_password(driver, selectors, password=None):
     print("Generated password: [redacted]")
 
     try:
-        password_inputs = driver.find_elements(By.CSS_SELECTOR, selectors.get("password_input_css"))
+        password_inputs = driver.find_elements(By.CSS_SELECTOR, step.get("input_css"))
 
         if len(password_inputs) >= 1:
             print(f"Found {len(password_inputs)} password field(s)")
@@ -679,7 +724,7 @@ def set_password(driver, selectors, password=None):
                 print("Confirm password filled")
             else:
                 try:
-                    confirm_selectors = _as_list(selectors.get("confirm_password_css"))
+                    confirm_selectors = _as_list(step.get("confirm_css"))
                     for sel in confirm_selectors:
                         try:
                             confirm_input = driver.find_element(By.CSS_SELECTOR, sel)
@@ -699,7 +744,7 @@ def set_password(driver, selectors, password=None):
             human_delay(1, 2)
             print("Clicking submit / create...")
 
-            submit_selectors = _as_list(selectors.get("submit_xpaths"))
+            submit_selectors = _as_list(step.get("submit_xpaths"))
 
             for xpath in submit_selectors:
                 try:
@@ -772,11 +817,10 @@ def detect_result(
 def execute_web_signup_steps(driver, wait, target_config, runtime):
     """Execute semantic web signup steps defined by target YAML."""
 
-    selectors = _selectors(target_config)
     steps = _steps(target_config)
 
     for index, raw_step in enumerate(steps, start=1):
-        step = _normalize_step(raw_step, index)
+        step = _step_config(target_config, _normalize_step(raw_step, index))
         if not _step_enabled(step):
             print(f"\nSkipping disabled workflow step {index}/{len(steps)}: {step['action']}")
             continue
@@ -788,26 +832,26 @@ def execute_web_signup_steps(driver, wait, target_config, runtime):
             if action == "open_start_page":
                 open_start_page(driver, target_config, step=step)
             elif action == "dismiss_cookies":
-                runtime["cookie_closed"] = dismiss_cookies(driver, selectors)
+                runtime["cookie_closed"] = dismiss_cookies(driver, step)
             elif action == "enter_signup_flow":
-                runtime["signup_clicked"] = enter_signup_flow(driver, selectors)
+                runtime["signup_clicked"] = enter_signup_flow(driver, step)
             elif action == "submit_email":
                 email_address = runtime.get("email_address")
                 if not email_address:
                     raise ValueError("submit_email requires runtime email_address")
-                submit_email(driver, wait, selectors, email_address)
+                submit_email(driver, wait, step, email_address)
             elif action == "submit_name":
                 runtime["random_name"] = submit_name(
                     driver,
                     wait,
-                    selectors,
+                    step,
                     name=step.get("value") or step.get("name"),
                 )
             elif action == "fetch_and_submit_otp":
                 runtime["verification_code"] = fetch_and_submit_otp(
                     driver,
                     wait,
-                    selectors,
+                    step,
                     fixed_account=runtime.get("fixed_account"),
                     email_filters=runtime.get("email_filters") or {},
                     jwt_token=runtime.get("jwt_token"),
@@ -815,7 +859,7 @@ def execute_web_signup_steps(driver, wait, target_config, runtime):
             elif action == "set_password":
                 password, password_submitted = set_password(
                     driver,
-                    selectors,
+                    step,
                     password=step.get("value") or step.get("password"),
                 )
                 runtime["password"] = password
