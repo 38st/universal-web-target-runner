@@ -14,7 +14,8 @@ from targets.web_signup import (
     execute_web_signup_steps,
     load_web_signup_config,
 )
-from targets.generic_signup import _render_value
+from core.context import RunContext
+from targets.generic_signup import _load_target_config, _render_value, execute_steps
 from targets.registry import get_target, list_targets
 
 
@@ -114,6 +115,96 @@ class UniversalRunnerTests(unittest.TestCase):
         })
 
         self.assertEqual(rendered, "hello Example User <user@example.test>")
+
+    def test_generic_signup_execute_steps_uses_shared_workflow(self):
+        class FakeDriver:
+            def __init__(self):
+                self.urls = []
+                self.screenshots = []
+
+            def get(self, url):
+                self.urls.append(url)
+
+            def save_screenshot(self, path):
+                self.screenshots.append(path)
+
+        class FakeElement:
+            def __init__(self):
+                self.clicked = 0
+                self.cleared = 0
+                self.typed = []
+
+            def click(self):
+                self.clicked += 1
+
+            def clear(self):
+                self.cleared += 1
+
+        class FakeWait:
+            def __init__(self, element):
+                self.element = element
+                self.conditions = []
+
+            def until(self, condition):
+                self.conditions.append(condition)
+                return self.element
+
+        driver = FakeDriver()
+        element = FakeElement()
+        wait = FakeWait(element)
+        clicks = []
+
+        with (
+            redirect_stdout(io.StringIO()),
+            patch("targets.generic_signup.type_text", side_effect=lambda el, text: el.typed.append(text)),
+            patch("targets.generic_signup.click_element", side_effect=lambda drv, el: clicks.append(el)),
+            patch("targets.generic_signup.time.sleep"),
+        ):
+            execute_steps(
+                driver,
+                wait,
+                [
+                    {"action": "goto", "url": "https://$host/start"},
+                    {"action": "wait", "selector": "body"},
+                    {"action": "fill", "selector": "#email", "value": "$email"},
+                    {"action": "click", "selector": "#submit"},
+                    {"action": "sleep", "seconds": "0.1"},
+                    {"action": "screenshot", "path": "$shot"},
+                ],
+                {
+                    "host": "example.test",
+                    "email": "user@example.test",
+                    "shot": "result.png",
+                },
+            )
+
+        self.assertEqual(driver.urls, ["https://example.test/start"])
+        self.assertEqual(driver.screenshots, ["result.png"])
+        self.assertEqual(element.typed, ["user@example.test"])
+        self.assertEqual(len(wait.conditions), 3)
+        self.assertEqual(clicks, [element])
+
+    def test_generic_signup_config_rejects_unsupported_actions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "bad_generic_signup.yaml"
+            path.write_text(
+                "\n".join([
+                    "name: bad_generic_signup",
+                    "authorized: true",
+                    "steps:",
+                    "  - action: unsupported",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+
+            context = RunContext(
+                target_name="generic_signup",
+                options={"target_config": str(path)},
+            )
+
+            with self.assertRaisesRegex(ValueError, "unsupported step action"):
+                _load_target_config(context)
 
     def test_web_signup_config_loads_step_fields_and_markers(self):
         target_config = load_web_signup_config()

@@ -10,9 +10,25 @@ from core.actions import click_element, type_text
 from core.browser import create_browser_session
 from core.config_loader import load_yaml_file
 from core.context import RunContext, RunResult
+from core.workflow import execute_workflow_steps, validate_workflow_steps
 
 
 DEFAULT_CONFIG_ENV = "GENERIC_SIGNUP_CONFIG"
+GENERIC_SIGNUP_STEP_ACTIONS = {
+    "goto",
+    "wait",
+    "fill",
+    "click",
+    "sleep",
+    "screenshot",
+}
+STEP_FIELD_REQUIREMENTS = {
+    "goto": ("url",),
+    "wait": ("selector",),
+    "fill": ("selector",),
+    "click": ("selector",),
+    "screenshot": ("path",),
+}
 
 
 def _selector_by(selector_type: str) -> str:
@@ -45,7 +61,18 @@ def _load_target_config(context: RunContext) -> dict[str, Any]:
     config = load_yaml_file(config_path)
     if config.get("authorized") is not True:
         raise ValueError("generic_signup config must set authorized: true")
+    _validate_generic_signup_config(config)
     return config
+
+
+def _validate_generic_signup_config(config: dict[str, Any]) -> None:
+    validate_workflow_steps(
+        config.get("steps"),
+        {action: None for action in GENERIC_SIGNUP_STEP_ACTIONS},
+        required_fields=STEP_FIELD_REQUIREMENTS,
+        source="generic_signup config",
+        workflow_name="Generic signup",
+    )
 
 
 def _step_selector(step: dict[str, Any]) -> tuple[str, str]:
@@ -55,45 +82,63 @@ def _step_selector(step: dict[str, Any]) -> tuple[str, str]:
     return _selector_by(step.get("by", "css")), selector
 
 
+def _render_step(step: dict[str, Any], variables: dict[str, Any]) -> dict[str, Any]:
+    return {key: _render_value(value, variables) for key, value in step.items()}
+
+
+def _build_generic_signup_handlers(driver, wait, variables: dict[str, Any]):
+    def handle_goto(step, runtime):
+        rendered = _render_step(step, variables)
+        driver.get(rendered["url"])
+
+    def handle_wait(step, runtime):
+        rendered = _render_step(step, variables)
+        by, selector = _step_selector(rendered)
+        wait.until(EC.presence_of_element_located((by, selector)))
+
+    def handle_fill(step, runtime):
+        rendered = _render_step(step, variables)
+        by, selector = _step_selector(rendered)
+        value = rendered.get("value", "")
+        element = wait.until(EC.element_to_be_clickable((by, selector)))
+        element.click()
+        element.clear()
+        type_text(element, str(value))
+
+    def handle_click(step, runtime):
+        rendered = _render_step(step, variables)
+        by, selector = _step_selector(rendered)
+        element = wait.until(EC.element_to_be_clickable((by, selector)))
+        click_element(driver, element)
+
+    def handle_sleep(step, runtime):
+        rendered = _render_step(step, variables)
+        seconds = float(rendered.get("seconds", 1))
+        time.sleep(seconds)
+
+    def handle_screenshot(step, runtime):
+        rendered = _render_step(step, variables)
+        driver.save_screenshot(rendered["path"])
+
+    return {
+        "goto": handle_goto,
+        "wait": handle_wait,
+        "fill": handle_fill,
+        "click": handle_click,
+        "sleep": handle_sleep,
+        "screenshot": handle_screenshot,
+    }
+
+
 def execute_steps(driver, wait, steps: list[dict[str, Any]], variables: dict[str, Any]) -> None:
     """Execute a config-driven sequence of browser actions."""
 
-    for index, raw_step in enumerate(steps, start=1):
-        if not isinstance(raw_step, dict):
-            raise ValueError(f"Step {index} must be a mapping")
-
-        action = str(raw_step.get("action", "")).strip().lower()
-        step = {key: _render_value(value, variables) for key, value in raw_step.items()}
-
-        if action == "goto":
-            url = step.get("url")
-            if not url:
-                raise ValueError(f"Step {index} missing url")
-            driver.get(url)
-        elif action == "wait":
-            by, selector = _step_selector(step)
-            wait.until(EC.presence_of_element_located((by, selector)))
-        elif action == "fill":
-            by, selector = _step_selector(step)
-            value = step.get("value", "")
-            element = wait.until(EC.element_to_be_clickable((by, selector)))
-            element.click()
-            element.clear()
-            type_text(element, str(value))
-        elif action == "click":
-            by, selector = _step_selector(step)
-            element = wait.until(EC.element_to_be_clickable((by, selector)))
-            click_element(driver, element)
-        elif action == "sleep":
-            seconds = float(step.get("seconds", 1))
-            time.sleep(seconds)
-        elif action == "screenshot":
-            path = step.get("path")
-            if not path:
-                raise ValueError(f"Step {index} missing path")
-            driver.save_screenshot(path)
-        else:
-            raise ValueError(f"Unsupported step action at {index}: {action}")
+    execute_workflow_steps(
+        steps,
+        _build_generic_signup_handlers(driver, wait, variables),
+        {"variables": variables},
+        workflow_name="Generic signup",
+    )
 
 
 class GenericSignupTarget:
@@ -106,10 +151,6 @@ class GenericSignupTarget:
         if context.fixed_account:
             variables.update(context.fixed_account)
 
-        steps = config.get("steps")
-        if not isinstance(steps, list) or not steps:
-            raise ValueError("generic_signup config requires a non-empty steps list")
-
         target_name = str(config.get("name") or self.name)
         region_name = config.get("region")
         use_proxy = bool(config.get("use_configured_proxy", False))
@@ -119,7 +160,7 @@ class GenericSignupTarget:
             profile_prefix=f"{target_name}_",
             use_configured_proxy=use_proxy,
         ) as session:
-            execute_steps(session.driver, session.wait, steps, variables)
+            execute_steps(session.driver, session.wait, config["steps"], variables)
 
         return RunResult(
             target_name=self.name,
