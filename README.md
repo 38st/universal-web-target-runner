@@ -9,12 +9,6 @@ Universal Web Target Runner is a configurable automation runner for authorized w
 
 Use this only for websites and workflows you own, test, or are explicitly authorized to automate.
 
-## Sponsors
-
-[![Swiftproxy - Residential proxy service](assets/swiftproxy-github-cn.png)](https://www.swiftproxy.net/?ref=awsbuilderid)
-
-[Swiftproxy](https://www.swiftproxy.net/?ref=awsbuilderid) provides residential proxy coverage across many regions, with dynamic traffic and trial options. Discount code: `PROXY90`
-
 ## Targets
 
 | Target | Description |
