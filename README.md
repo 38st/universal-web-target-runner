@@ -15,10 +15,6 @@ Use this only for websites and workflows you own, test, or are explicitly author
 
 [Swiftproxy](https://www.swiftproxy.net/?ref=awsbuilderid) provides residential proxy coverage across many regions, with dynamic traffic and trial options. Discount code: `PROXY90`
 
-<a href="https://www.thordata.com/?ls=add&lk=add"><img src="assets/thordata-proxy.png" alt="Thordata Proxy" width="630"></a>
-
-[Thordata Proxy](https://www.thordata.com/?ls=add&lk=add) provides dynamic residential, static ISP, mobile, and unlimited residential proxy products.
-
 ## Targets
 
 | Target | Description |
