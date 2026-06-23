@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.storage import append_jsonl, read_jsonl
+from core.workflow import execute_workflow_steps, validate_workflow_steps
 from runners.main import _normalize_target_name
 from services.email_service import message_matches_filters
 from targets.web_signup import (
@@ -41,6 +42,70 @@ class UniversalRunnerTests(unittest.TestCase):
             append_jsonl(path, {"target": "demo", "status": "ok"})
 
             self.assertEqual(read_jsonl(path), [{"target": "demo", "status": "ok"}])
+
+    def test_workflow_executor_uses_registered_handlers(self):
+        runtime = {"calls": []}
+
+        def record_first(step, runtime):
+            runtime["calls"].append((step["action"], step["value"]))
+
+        def record_second(step, runtime):
+            runtime["calls"].append((step["action"], step["value"]))
+
+        with redirect_stdout(io.StringIO()):
+            execute_workflow_steps(
+                [
+                    {"action": "first", "value": 1},
+                    {"action": "skip_me", "enabled": False},
+                    {"action": "second", "value": 2},
+                ],
+                {
+                    "first": record_first,
+                    "second": record_second,
+                    "skip_me": lambda step, runtime: runtime["calls"].append("skipped"),
+                },
+                runtime,
+            )
+
+        self.assertEqual(runtime["calls"], [("first", 1), ("second", 2)])
+
+    def test_workflow_validation_resolves_legacy_fields(self):
+        validate_workflow_steps(
+            [{"action": "submit"}],
+            {"submit": lambda step, runtime: None},
+            required_fields={"submit": ("input_css",)},
+            target_config={"selectors": {"legacy_input": "input[type=email]"}},
+            legacy_field_map={"submit": {"input_css": "legacy_input"}},
+        )
+
+    def test_workflow_optional_step_failure_continues(self):
+        runtime = {"calls": []}
+
+        def fail(step, runtime):
+            raise RuntimeError("ignored")
+
+        def record(step, runtime):
+            runtime["calls"].append(step["action"])
+
+        with redirect_stdout(io.StringIO()):
+            execute_workflow_steps(
+                [
+                    {"action": "may_fail", "optional": True},
+                    {"action": "record"},
+                ],
+                {"may_fail": fail, "record": record},
+                runtime,
+            )
+
+        self.assertEqual(runtime["calls"], ["record"])
+
+    def test_workflow_validation_rejects_missing_required_fields(self):
+        with self.assertRaisesRegex(ValueError, "steps\\[1\\]\\.input_css"):
+            validate_workflow_steps(
+                [{"action": "submit"}],
+                {"submit": lambda step, runtime: None},
+                required_fields={"submit": ("input_css",)},
+            )
 
     def test_generic_signup_template_rendering(self):
         rendered = _render_value("hello $name <$email>", {

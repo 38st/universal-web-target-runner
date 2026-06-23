@@ -10,7 +10,6 @@ import random
 import json
 import os
 from datetime import datetime
-from typing import Any
 from config import REGION_CURRENT
 from core.actions import (
     click_element as human_click,
@@ -26,6 +25,13 @@ from core.browser import (
 )
 from core.config_loader import load_yaml_file, resolve_project_path
 from core.context import RunContext
+from core.workflow import (
+    execute_workflow_steps,
+    normalize_step,
+    resolve_step_config,
+    step_enabled,
+    validate_workflow_steps,
+)
 from services.email_service import create_temp_email
 from helpers.multilang import lang_selector
 
@@ -34,7 +40,7 @@ fake = Faker('en_US')
 DEFAULT_TARGET_CONFIG_PATH = "config/targets/aws_builder_id.yaml"
 TARGET_CONFIG_ENV = "WEB_SIGNUP_CONFIG"
 LEGACY_TARGET_CONFIG_ENV = "AWS_BUILDER_CONFIG"
-SUPPORTED_STEP_ACTIONS = {
+WEB_SIGNUP_STEP_ACTIONS = {
     "open_start_page",
     "dismiss_cookies",
     "enter_signup_flow",
@@ -108,35 +114,20 @@ def load_web_signup_config(config_path=None):
 
 
 def _validate_web_signup_config(target_config, path):
-    steps = _steps(target_config)
-    missing = []
-    if not isinstance(steps, list) or not steps:
-        missing.append("steps")
-    else:
-        for index, raw_step in enumerate(steps, start=1):
-            step = _step_config(target_config, _normalize_step(raw_step, index))
-            if not _step_enabled(step):
-                continue
+    def validate_open_start_page(step, index, missing):
+        if not (step.get("url") or target_config.get("start_url")):
+            missing.append(f"start_url or steps[{index}].url")
 
-            action = step["action"]
-            if action not in SUPPORTED_STEP_ACTIONS:
-                raise ValueError(
-                    f"Web signup target config {path} has unsupported step action "
-                    f"at steps[{index}]: {action}"
-                )
-
-            if action == "open_start_page" and not (step.get("url") or target_config.get("start_url")):
-                missing.append(f"start_url or steps[{index}].url")
-
-            missing.extend(
-                f"steps[{index}].{key} for {action}"
-                for key in STEP_FIELD_REQUIREMENTS.get(action, ())
-                if not step.get(key)
-            )
-
-    if missing:
-        missing_text = ", ".join(missing)
-        raise ValueError(f"Web signup target config {path} is missing: {missing_text}")
+    validate_workflow_steps(
+        _steps(target_config),
+        {action: None for action in WEB_SIGNUP_STEP_ACTIONS},
+        required_fields=STEP_FIELD_REQUIREMENTS,
+        target_config=target_config,
+        legacy_field_map=LEGACY_STEP_FIELD_MAP,
+        step_validators={"open_start_page": validate_open_start_page},
+        source=f"Web signup target config {path}",
+        workflow_name="Web signup",
+    )
 
 
 def _selectors(target_config):
@@ -151,38 +142,22 @@ def _steps(target_config):
     return target_config.get("steps") or []
 
 
-def _normalize_step(raw_step: Any, index: int) -> dict[str, Any]:
-    if isinstance(raw_step, str):
-        step = {"action": raw_step}
-    elif isinstance(raw_step, dict):
-        step = dict(raw_step)
-    else:
-        raise ValueError(f"Web signup step {index} must be a string or mapping")
-
-    action = str(step.get("action", "")).strip()
-    if not action:
-        raise ValueError(f"Web signup step {index} is missing action")
-
-    step["action"] = action.lower().replace("-", "_")
-    return step
+def _normalize_step(raw_step, index):
+    return normalize_step(raw_step, index, workflow_name="Web signup")
 
 
 def _step_enabled(step):
-    return step.get("enabled", True) is not False
+    return step_enabled(step)
 
 
 def _step_config(target_config, step):
     """Return step config with legacy top-level selectors as fallback values."""
 
-    merged = dict(step)
-    legacy_selectors = _selectors(target_config)
-    field_map = LEGACY_STEP_FIELD_MAP.get(merged.get("action"), {})
-
-    for step_key, legacy_key in field_map.items():
-        if merged.get(step_key) is None and legacy_key in legacy_selectors:
-            merged[step_key] = legacy_selectors[legacy_key]
-
-    return merged
+    return resolve_step_config(
+        target_config,
+        step,
+        legacy_field_map=LEGACY_STEP_FIELD_MAP,
+    )
 
 
 def generate_strong_password():
@@ -814,78 +789,88 @@ def detect_result(
     return "unconfirmed"
 
 
+def _build_web_signup_handlers(driver, wait, target_config):
+    """Register web signup step handlers for the shared workflow executor."""
+
+    def handle_open_start_page(step, runtime):
+        open_start_page(driver, target_config, step=step)
+
+    def handle_dismiss_cookies(step, runtime):
+        runtime["cookie_closed"] = dismiss_cookies(driver, step)
+
+    def handle_enter_signup_flow(step, runtime):
+        runtime["signup_clicked"] = enter_signup_flow(driver, step)
+
+    def handle_submit_email(step, runtime):
+        email_address = runtime.get("email_address")
+        if not email_address:
+            raise ValueError("submit_email requires runtime email_address")
+        submit_email(driver, wait, step, email_address)
+
+    def handle_submit_name(step, runtime):
+        runtime["random_name"] = submit_name(
+            driver,
+            wait,
+            step,
+            name=step.get("value") or step.get("name"),
+        )
+
+    def handle_fetch_and_submit_otp(step, runtime):
+        runtime["verification_code"] = fetch_and_submit_otp(
+            driver,
+            wait,
+            step,
+            fixed_account=runtime.get("fixed_account"),
+            email_filters=runtime.get("email_filters") or {},
+            jwt_token=runtime.get("jwt_token"),
+        )
+
+    def handle_set_password(step, runtime):
+        password, password_submitted = set_password(
+            driver,
+            step,
+            password=step.get("value") or step.get("password"),
+        )
+        runtime["password"] = password
+        runtime["password_submitted"] = password_submitted
+
+    def handle_detect_result(step, runtime):
+        runtime["status"] = detect_result(
+            driver,
+            email_address=runtime.get("email_address"),
+            password=runtime.get("password"),
+            random_name=runtime.get("random_name"),
+            jwt_token=runtime.get("jwt_token"),
+            verification_code=runtime.get("verification_code"),
+            password_submitted=runtime.get("password_submitted", False),
+            success_markers=runtime.get("success_markers") or [],
+            blocking_markers=runtime.get("blocking_markers") or [],
+            output_file=runtime.get("output_file", "accounts.jsonl"),
+        )
+
+    return {
+        "open_start_page": handle_open_start_page,
+        "dismiss_cookies": handle_dismiss_cookies,
+        "enter_signup_flow": handle_enter_signup_flow,
+        "submit_email": handle_submit_email,
+        "submit_name": handle_submit_name,
+        "fetch_and_submit_otp": handle_fetch_and_submit_otp,
+        "set_password": handle_set_password,
+        "detect_result": handle_detect_result,
+    }
+
+
 def execute_web_signup_steps(driver, wait, target_config, runtime):
     """Execute semantic web signup steps defined by target YAML."""
 
-    steps = _steps(target_config)
-
-    for index, raw_step in enumerate(steps, start=1):
-        step = _step_config(target_config, _normalize_step(raw_step, index))
-        if not _step_enabled(step):
-            print(f"\nSkipping disabled workflow step {index}/{len(steps)}: {step['action']}")
-            continue
-
-        action = step["action"]
-        print(f"\nWorkflow step {index}/{len(steps)}: {action}")
-
-        try:
-            if action == "open_start_page":
-                open_start_page(driver, target_config, step=step)
-            elif action == "dismiss_cookies":
-                runtime["cookie_closed"] = dismiss_cookies(driver, step)
-            elif action == "enter_signup_flow":
-                runtime["signup_clicked"] = enter_signup_flow(driver, step)
-            elif action == "submit_email":
-                email_address = runtime.get("email_address")
-                if not email_address:
-                    raise ValueError("submit_email requires runtime email_address")
-                submit_email(driver, wait, step, email_address)
-            elif action == "submit_name":
-                runtime["random_name"] = submit_name(
-                    driver,
-                    wait,
-                    step,
-                    name=step.get("value") or step.get("name"),
-                )
-            elif action == "fetch_and_submit_otp":
-                runtime["verification_code"] = fetch_and_submit_otp(
-                    driver,
-                    wait,
-                    step,
-                    fixed_account=runtime.get("fixed_account"),
-                    email_filters=runtime.get("email_filters") or {},
-                    jwt_token=runtime.get("jwt_token"),
-                )
-            elif action == "set_password":
-                password, password_submitted = set_password(
-                    driver,
-                    step,
-                    password=step.get("value") or step.get("password"),
-                )
-                runtime["password"] = password
-                runtime["password_submitted"] = password_submitted
-            elif action == "detect_result":
-                runtime["status"] = detect_result(
-                    driver,
-                    email_address=runtime.get("email_address"),
-                    password=runtime.get("password"),
-                    random_name=runtime.get("random_name"),
-                    jwt_token=runtime.get("jwt_token"),
-                    verification_code=runtime.get("verification_code"),
-                    password_submitted=runtime.get("password_submitted", False),
-                    success_markers=runtime.get("success_markers") or [],
-                    blocking_markers=runtime.get("blocking_markers") or [],
-                    output_file=runtime.get("output_file", "accounts.jsonl"),
-                )
-            else:
-                raise ValueError(f"Unsupported web signup step action: {action}")
-        except Exception as e:
-            if step.get("optional") is True:
-                print(f"⚠️ Optional workflow step failed ({action}): {e}")
-                continue
-            raise
-
-    return runtime
+    return execute_workflow_steps(
+        _steps(target_config),
+        _build_web_signup_handlers(driver, wait, target_config),
+        runtime,
+        target_config=target_config,
+        legacy_field_map=LEGACY_STEP_FIELD_MAP,
+        workflow_name="Web signup",
+    )
 
 
 def run(fixed_account=None, target_config_path=None):
