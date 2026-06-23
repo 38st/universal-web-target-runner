@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.storage import append_jsonl, read_jsonl
+from core.target_config import load_target_config, select_target_config_path
 from core.workflow import execute_workflow_steps, validate_workflow_steps
 from runners.main import _normalize_target_name
 from services.email_service import message_matches_filters
@@ -43,6 +44,60 @@ class UniversalRunnerTests(unittest.TestCase):
             append_jsonl(path, {"target": "demo", "status": "ok"})
 
             self.assertEqual(read_jsonl(path), [{"target": "demo", "status": "ok"}])
+
+    def test_target_config_path_selection_prefers_explicit_then_env_then_default(self):
+        with patch.dict("os.environ", {"EXAMPLE_TARGET_CONFIG": "from-env.yaml"}):
+            self.assertEqual(
+                select_target_config_path(
+                    "explicit.yaml",
+                    env_vars=("EXAMPLE_TARGET_CONFIG",),
+                    default_path="default.yaml",
+                ),
+                "explicit.yaml",
+            )
+            self.assertEqual(
+                select_target_config_path(
+                    env_vars=("EXAMPLE_TARGET_CONFIG",),
+                    default_path="default.yaml",
+                ),
+                "from-env.yaml",
+            )
+
+        self.assertEqual(
+            select_target_config_path(default_path="default.yaml"),
+            "default.yaml",
+        )
+
+    def test_target_config_loader_runs_authorization_and_validator(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "target.yaml"
+            path.write_text(
+                "\n".join([
+                    "name: example",
+                    "authorized: true",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            calls = []
+
+            config = load_target_config(
+                path,
+                target_name="example",
+                require_authorized=True,
+                validator=lambda loaded, loaded_path: calls.append((loaded["name"], loaded_path)),
+            )
+
+        self.assertEqual(config["name"], "example")
+        self.assertEqual(calls[0][0], "example")
+
+    def test_target_config_loader_rejects_missing_authorization(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "target.yaml"
+            path.write_text("name: example\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "authorized: true"):
+                load_target_config(path, target_name="example", require_authorized=True)
 
     def test_workflow_executor_uses_registered_handlers(self):
         runtime = {"calls": []}

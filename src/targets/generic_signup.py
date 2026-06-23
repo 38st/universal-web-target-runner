@@ -1,4 +1,3 @@
-import os
 import time
 from string import Template
 from typing import Any
@@ -8,8 +7,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from core.actions import click_element, type_text
 from core.browser import create_browser_session
-from core.config_loader import load_yaml_file
 from core.context import RunContext, RunResult
+from core.target_config import load_target_config
 from core.workflow import execute_workflow_steps, validate_workflow_steps
 
 
@@ -52,25 +51,25 @@ def _render_value(value: Any, variables: dict[str, Any]) -> Any:
 
 
 def _load_target_config(context: RunContext) -> dict[str, Any]:
-    config_path = context.options.get("target_config") or os.environ.get(DEFAULT_CONFIG_ENV)
-    if not config_path:
-        raise ValueError(
+    return load_target_config(
+        context.options.get("target_config"),
+        env_vars=(DEFAULT_CONFIG_ENV,),
+        target_name="generic_signup",
+        missing_message=(
             "generic_signup requires --target-config or GENERIC_SIGNUP_CONFIG. "
             "Use it only for owned, test, or explicitly authorized flows."
-        )
-    config = load_yaml_file(config_path)
-    if config.get("authorized") is not True:
-        raise ValueError("generic_signup config must set authorized: true")
-    _validate_generic_signup_config(config)
-    return config
+        ),
+        require_authorized=True,
+        validator=_validate_generic_signup_config,
+    )
 
 
-def _validate_generic_signup_config(config: dict[str, Any]) -> None:
+def _validate_generic_signup_config(config: dict[str, Any], path=None) -> None:
     validate_workflow_steps(
         config.get("steps"),
         {action: None for action in GENERIC_SIGNUP_STEP_ACTIONS},
         required_fields=STEP_FIELD_REQUIREMENTS,
-        source="generic_signup config",
+        source=f"generic_signup config {path}" if path else "generic_signup config",
         workflow_name="Generic signup",
     )
 

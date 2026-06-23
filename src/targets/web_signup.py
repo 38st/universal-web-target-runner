@@ -23,8 +23,8 @@ from core.browser import (
     print_browser_environment,
     resolve_browser_proxy,
 )
-from core.config_loader import load_yaml_file, resolve_project_path
 from core.context import RunContext
+from core.target_config import load_target_config
 from core.workflow import (
     execute_workflow_steps,
     normalize_step,
@@ -99,18 +99,13 @@ def _as_list(value):
 def load_web_signup_config(config_path=None):
     """Load web signup target behavior from YAML."""
 
-    selected_path = (
-        config_path
-        or os.environ.get(TARGET_CONFIG_ENV)
-        or os.environ.get(LEGACY_TARGET_CONFIG_ENV)
-        or DEFAULT_TARGET_CONFIG_PATH
+    return load_target_config(
+        config_path,
+        env_vars=(TARGET_CONFIG_ENV, LEGACY_TARGET_CONFIG_ENV),
+        default_path=DEFAULT_TARGET_CONFIG_PATH,
+        target_name="Web signup",
+        validator=_validate_web_signup_config,
     )
-    path = resolve_project_path(selected_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Web signup target config not found: {path}")
-    target_config = load_yaml_file(path)
-    _validate_web_signup_config(target_config, path)
-    return target_config
 
 
 def _validate_web_signup_config(target_config, path):
